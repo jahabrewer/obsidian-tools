@@ -30,7 +30,10 @@ typeset -a matched_files
 process_file() {
     local file="$1"
     
-    echo "\n\n## File: ${file#./}\n" >> "$output_file"
+    echo "---" >> "$output_file"
+    echo "source: ${file#./}" >> "$output_file"
+    echo "---" >> "$output_file"
+    echo >> "$output_file"
     cat "$file" >> "$output_file"
     ((processed_files++))
 }
