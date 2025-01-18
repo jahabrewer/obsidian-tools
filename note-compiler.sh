@@ -35,6 +35,8 @@ process_file() {
     echo "---" >> "$output_file"
     echo >> "$output_file"
     cat "$file" >> "$output_file"
+    echo >> "$output_file"
+    echo >> "$output_file"
     ((processed_files++))
 }
 
