@@ -2,10 +2,35 @@
 
 # Check if at least one argument is provided
 if [[ $# -eq 0 ]]; then
-    echo "Usage: $0 <output_file> <glob_pattern...>"
+    echo "Usage: $0 [options] <output_file> <glob_pattern...>"
+    echo "Options:"
+    echo "  -v, --verbose    List all files included in the compilation"
+    echo "  -c, --clipboard  Copy the resulting file to clipboard"
     echo "Example: $0 output.md \"**/*.md\" \"!.obsidian/**\""
+    echo "Example with verbose: $0 -v output.md \"**/*.md\" \"!.obsidian/**\""
+    echo "Example with clipboard: $0 -c output.md \"**/*.md\" \"!.obsidian/**\""
     exit 1
 fi
+
+# Parse options
+verbose=false
+clipboard=false
+while [[ "$1" == -* ]]; do
+    case "$1" in
+        -v|--verbose)
+            verbose=true
+            shift
+            ;;
+        -c|--clipboard)
+            clipboard=true
+            shift
+            ;;
+        *)
+            echo "Unknown option: $1"
+            exit 1
+            ;;
+    esac
+done
 
 # First argument is the output file
 output_file="$1"
@@ -29,7 +54,11 @@ typeset -a matched_files
 # Function to process each file
 process_file() {
     local file="$1"
-    
+
+    if [[ $verbose == true ]]; then
+        echo "Including file: ${file#./}"
+    fi
+
     echo "---" >> "$output_file"
     echo "source: ${file#./}" >> "$output_file"
     echo "---" >> "$output_file"
@@ -69,7 +98,7 @@ for file in $matched_files; do
             break
         fi
     done
-    
+
     if [[ $excluded == false ]]; then
         process_file "$file"
         ((total_matches++))
@@ -78,3 +107,13 @@ done
 
 echo "Found $total_matches matching files"
 echo "Processed $processed_files files into $output_file"
+
+# Get and display the output file size
+file_size=$(du -h "$output_file" | cut -f1)
+echo "Output file size: $file_size"
+
+# Copy to clipboard if requested
+if [[ $clipboard == true ]]; then
+    pbcopy < "$output_file"
+    echo "Content copied to clipboard"
+fi
