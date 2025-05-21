@@ -129,27 +129,24 @@ mkdir -p "$output_dir" || exit 1
 output_file=$(eval echo "$output_file_path")
 : > "$output_file"
 
-# Log resolved argument values
-echo "Resolved arguments:"
-echo "Output file: $output_file"
-echo "Verbose mode: $verbose"
-echo "Clipboard mode: $clipboard"
-
-# Log glob patterns
-echo "Glob patterns:"
-# Get the final patterns that will be used
-if [[ $# -gt 0 ]]; then
-    # Use command-line patterns if provided
-    for pattern in "$@"; do
-        echo "  $pattern"
-    done
-else
-    # Use config patterns if no command-line patterns
-
-    # Use config patterns if no command-line patterns
-    for pattern in "${config_glob_patterns[@]}"; do
-        echo "  $pattern"
-    done
+# Log resolved argument values only if verbose mode is enabled
+if [[ $verbose == true ]]; then
+    echo "Resolved arguments:"
+    echo "Output file: $output_file"
+    echo "Verbose mode: $verbose"
+    echo "Clipboard mode: $clipboard"
+    echo "Glob patterns to be used (unexpanded):"
+    if [[ $# -gt 0 ]]; then
+        # Use command-line patterns if provided
+        for pattern in "$@"; do
+            echo "  $pattern"
+        done
+    else
+        # Use config patterns if no command-line patterns
+        for pattern in "${config_glob_patterns[@]}"; do
+            echo "  $pattern"
+        done
+    fi
 fi
 
 # Initialize counters
