@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.jbrewer.obsidianbackup</string> <!-- A unique identifier for the job -->
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string> <!-- Or your shell, e.g., /bin/zsh -->
+        <string>/Users/jbrewer/IdeaProjects/note-compiler/obsidian-backup.sh</string>
+        <!-- You can add script arguments here if needed, e.g., <string>-v</string> -->
+    </array>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>16</integer> <!-- 4 PM -->
+        <key>Minute</key>
+        <integer>0</integer>  <!-- On the hour -->
+        <!-- You can also add Day, Weekday, Month keys for more specific scheduling -->
+    </dict>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/jbrewer/IdeaProjects/note-compiler/</string> <!-- Or /tmp or ~ -->
+
+    <key>StandardOutPath</key>
+    <string>/Users/jbrewer/Library/Logs/com.jbrewer.obsidianbackup.out.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/jbrewer/Library/Logs/com.jbrewer.obsidianbackup.err.log</string>
+    
+    <key>Nice</key>
+    <integer>10</integer> <!-- Run with lower priority -->
+
+    <!-- <key>RunAtLoad</key> -->
+    <!-- <true/> --> <!-- Uncomment to run once when the job is first loaded (for testing) -->
+
+</dict>
+</plist>
