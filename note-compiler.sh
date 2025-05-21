@@ -137,9 +137,20 @@ echo "Clipboard mode: $clipboard"
 
 # Log glob patterns
 echo "Glob patterns:"
-for pattern in "$@"; do
-    echo "  $pattern"
-done
+# Get the final patterns that will be used
+if [[ $# -gt 0 ]]; then
+    # Use command-line patterns if provided
+    for pattern in "$@"; do
+        echo "  $pattern"
+    done
+else
+    # Use config patterns if no command-line patterns
+
+    # Use config patterns if no command-line patterns
+    for pattern in "${config_glob_patterns[@]}"; do
+        echo "  $pattern"
+    done
+fi
 
 # Initialize counters
 total_matches=0
