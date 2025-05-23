@@ -1,159 +1,181 @@
 #!/bin/zsh
 
-
-# Default values
+# Default values for script logic
 verbose=false
 clipboard=false
 config_file=~/.note-compiler.yaml
 
-# Config file values (set via ~/.note-compiler.yaml)
+# Config file values (will be populated by read_config)
 config_output_file_path=""
 config_glob_patterns=()
 
-# Command-line values (set via arguments)
+# Variables for final determined values
 output_file_path=""
-glob_patterns=()
+typeset -a actual_glob_patterns_to_use
+
+print_usage() {
+    cat >&2 <<EOF
+Usage: $0 [options] <output_file> <glob_pattern...>
+       $0 [options]  # If output_file and glob_patterns are in config
+
+Options:
+  -v, --verbose    List all files included in the compilation.
+  -c, --clipboard  Copy the resulting file to clipboard.
+  -f, --config F   Specify an alternative config file.
+                   (Default: ~/.note-compiler.yaml)
+
+Example: $0 -v -f myconfig.yaml output.md "**/*.md" "!.obsidian/**"
+
+Config file format (YAML, e.g., ~/.note-compiler.yaml):
+  output_file_path: "path/to/output_\$(date +%Y-%m-%d).txt"
+  glob_patterns:
+    - "**/*.md"
+    - "!.obsidian/**"
+EOF
+}
 
 # Function to log resolved config values
 log_config_values() {
-    echo "Config file values:"
-    echo "  verbose: $verbose"
-    echo "  clipboard: $clipboard"
-    echo "  output_file_path: $config_output_file_path"
-    echo "  glob_patterns:"
-    for pattern in "${config_glob_patterns[@]}"; do
-        echo "    $pattern"
-    done
+    # This function is called from within read_config
+    # and uses the state of variables at that point.
+    echo "Config file values (from $config_file):"
+    echo "  output_file_path (config): $config_output_file_path"
+    echo "  glob_patterns (config):"
+    if [[ ${#config_glob_patterns[@]} -gt 0 ]]; then
+        for pattern in "${config_glob_patterns[@]}"; do
+            echo "    $pattern"
+        done
+    else
+        echo "    (none)"
+    fi
 }
 
 # Function to read config file
 read_config() {
     if [[ -f "$config_file" ]]; then
         echo "Loading configuration from $config_file"
-        
-        # Only use yq if it's available
+
         if command -v yq &> /dev/null; then
-            if yq -e '.verbose' "$config_file" &>/dev/null; then
-                local config_verbose=$(yq '.verbose' "$config_file")
-                [[ "$config_verbose" == "true" ]] && verbose=true
-            fi
-            
-            if yq -e '.clipboard' "$config_file" &>/dev/null; then
-                local config_clipboard=$(yq '.clipboard' "$config_file")
-                [[ "$config_clipboard" == "true" ]] && clipboard=true
-            fi
-            
+            # Load output_file_path from config only if yq finds it
             if yq -e '.output_file_path' "$config_file" &>/dev/null; then
                 config_output_file_path=$(yq '.output_file_path' "$config_file")
             fi
-            
+
+            # Load glob_patterns from config only if yq finds them
             if yq -e '.glob_patterns[]' "$config_file" &>/dev/null; then
-                config_glob_patterns=()
+                config_glob_patterns=() # Clear to ensure fresh load
                 while IFS= read -r pattern; do
                     config_glob_patterns+=("$pattern")
                 done < <(yq '.glob_patterns[]' "$config_file")
             fi
         else
-            echo "Warning: yq is not installed, skipping config file loading."
+            echo "Warning: yq is not installed. Skipping config file loading for values other than file path if set by -f." >&2
         fi
+    elif [[ "$config_file" != "$HOME/.note-compiler.yaml" ]]; then
+        # If a custom config file was specified via -f but not found
+        echo "Error: Specified config file '$config_file' not found." >&2
+        exit 1
     fi
-    log_config_values
+    # log_config_values # Call this after read_config, or it might show stale verbose/clipboard
 }
 
-# Check if at least one argument is provided
-if [[ $# -eq 0 ]]; then
-    echo "Usage: $0 [options] <output_file> <glob_pattern...>"
-    echo "Options:"
-    echo "  -v, --verbose    List all files included in the compilation"
-    echo "  -c, --clipboard  Copy the resulting file to clipboard"
-    echo "  -f, --config     Specify an alternative config file (default: ~/.note-compiler.yaml)"
-    echo
-    echo "Example: $0 [-cv] output.md \"**/*.md\" \"!.obsidian/**\""
-    echo
-    echo "Config file (~/.note-compiler.yaml) format (YAML):"
-    echo "  verbose: true|false"
-    echo "  clipboard: true|false"
-    echo "  output_file_path: \"path/to/output_\$(date +%Y-%m-%d).txt\""
-    echo "  glob_patterns:"
-    echo "    - \"**/*.md\""
-    echo "    - \"!.obsidian/**\""
-    exit 1
+# --- Argument Parsing with zparseopts ---
+zmodload zsh/zutil
+
+local -a _cli_verbose_flags
+local -a _cli_clipboard_flags
+local -a _cli_config_file_values # Stores value(s) from -f or --config
+
+# -D: Deletes parsed options from $@, leaving only positional args.
+# -F: Fails if an unknown option is encountered.
+zparseopts -D -F -- \
+  {v,-verbose}=_cli_verbose_flags \
+  {c,-clipboard}=_cli_clipboard_flags \
+  {f,-config}:=_cli_config_file_values \
+  || { print_usage; exit 1; } # On failure (e.g., unknown option), print usage and exit.
+
+# Update script's main variables based on parsed CLI options
+if (( $#_cli_verbose_flags )); then
+  verbose=true
 fi
 
-# Parse options
-while [[ "$1" == -* ]]; do
-    case "$1" in
-        -v|--verbose)
-            verbose=true
-            shift
-            ;;
-        -c|--clipboard)
-            clipboard=true
-            shift
-            ;;
-        -f|--config)
-            config_file="$2"
-            shift 2
-            ;;
-        *)
-            echo "Unknown option: $1"
-            exit 1
-            ;;
-    esac
-done
+if (( $#_cli_clipboard_flags )); then
+  clipboard=true
+fi
 
-# Read config (CLI options will override these)
+if (( $#_cli_config_file_values )); then
+  # If -f/--config is used multiple times, the last one takes precedence.
+  config_file="${_cli_config_file_values[-1]}"
+fi
+# --- End of Argument Parsing ---
+
+# Read config (CLI options like -f <new_config> will have updated `config_file` by now)
+# `verbose` and `clipboard` may be further modified by read_config if not set by CLI.
 read_config
 
-# Determine output file 
+# Log config values AFTER they've been fully resolved (CLI + config file)
+if $verbose ; then # Show config log only if verbose is ultimately true
+    log_config_values
+fi
+
+# Determine output file path
+# $@ now contains only positional arguments. $1 is the potential output_file_path.
 if [[ $# -ge 1 ]]; then
-    # Use provided output file from command line
     output_file_path="$1"
-    shift
+    shift # Remove output_file_path from positional arguments, rest are globs
 else
-    # Use output file path from config if available
     if [[ -n "$config_output_file_path" ]]; then
         output_file_path="$config_output_file_path"
     else
-        echo "Error: No output file specified and no output_file_path found in config."
-        echo "Please provide an output file as the first argument or set output_file_path in your config."
+        echo "Error: No output file specified and no output_file_path found in config." >&2
+        echo "Please provide an output file as the first argument or set output_file_path in your config." >&2
+        print_usage
         exit 1
     fi
 fi
 
 # Create output directory if it doesn't exist
 output_dir=$(dirname "$output_file_path")
-mkdir -p "$output_dir" || exit 1
+mkdir -p "$output_dir" || { echo "Error: Could not create directory $output_dir" >&2 ; exit 1; }
 
-# Create/clear the output file
+# Create/clear the output file (eval is used to allow dynamic paths like those with $(date))
 output_file=$(eval echo "$output_file_path")
-: > "$output_file"
+: > "$output_file" || { echo "Error: Could not write to output file $output_file" >&2 ; exit 1; }
 
-# Log resolved argument values only if verbose mode is enabled
-if [[ $verbose == true ]]; then
-    echo "Resolved arguments:"
-    echo "Output file: $output_file"
-    echo "Verbose mode: $verbose"
-    echo "Clipboard mode: $clipboard"
-    echo "Glob patterns to be used (unexpanded):"
-    if [[ $# -gt 0 ]]; then
-        # Use command-line patterns if provided
-        for pattern in "$@"; do
-            echo "  $pattern"
-        done
+# Determine glob patterns to use
+# $@ at this point (after output_file_path potentially shifted) contains command-line glob patterns.
+if [[ $# -gt 0 ]]; then # Command-line glob patterns were provided
+    actual_glob_patterns_to_use=("$@")
+else # No command-line glob patterns, try config
+    if [[ ${#config_glob_patterns[@]} -gt 0 ]]; then
+        actual_glob_patterns_to_use=("${config_glob_patterns[@]}")
     else
-        # Use config patterns if no command-line patterns
-        for pattern in "${config_glob_patterns[@]}"; do
-            echo "  $pattern"
-        done
+        echo "Error: No glob patterns specified and none found in config." >&2
+        echo "Please provide at least one glob pattern or set glob_patterns in your config." >&2
+        print_usage
+        exit 1
     fi
 fi
 
-# Initialize counters
-total_matches=0
-processed_files=0
+# Log resolved argument values only if verbose mode is enabled
+if [[ $verbose == true ]]; then
+    echo "\nResolved arguments for operation:"
+    echo "  Output file: $output_file"
+    echo "  Verbose mode: $verbose"
+    echo "  Clipboard mode: $clipboard"
+    echo "  Config file effectively used: $config_file"
+    echo "  Glob patterns to be used (unexpanded):"
+    for pattern in "${actual_glob_patterns_to_use[@]}"; do
+        echo "    $pattern"
+    done
+    echo "" # Newline for better readability
+fi
 
-# Initialize arrays
+# Initialize counters
+processed_files=0
+excluded_file_count=0
+
+# Initialize arrays for glob processing
 typeset -a exclude_patterns
 typeset -a matched_files
 
@@ -175,62 +197,67 @@ process_file() {
     ((processed_files++))
 }
 
-# Enable extended globbing and null_glob
+# Enable extended globbing and null_glob for pattern matching
 setopt extended_glob null_glob
 
-# Use passed glob patterns or config patterns if none provided
-if [[ $# -eq 0 ]]; then
-    if [[ ${#config_glob_patterns[@]} -gt 0 ]]; then
-        set -- "${config_glob_patterns[@]}"
-    else
-        echo "Error: No glob patterns specified and none found in config."
-        echo "Please provide at least one glob pattern or set glob_patterns in your config."
-        exit 1
-    fi
-fi
-
-# For each remaining argument (glob pattern)
-for pattern in "$@"; do
-    # Check if pattern starts with ! for exclusion
-    if [[ "$pattern" = !* ]]; then
-        # Remove the ! and add it to exclusion array
-        exclude_patterns+=("${pattern#!}")
+# Process each glob pattern
+for pattern in "${actual_glob_patterns_to_use[@]}"; do
+    if [[ "$pattern" == !* ]]; then # Check if pattern starts with ! for exclusion
+        exclude_patterns+=("${pattern#!}") # Remove the ! and add to exclusion array
     else
         # Expand the glob pattern directly
-        files=(${~pattern})
-        for file in $files; do
-            if [[ -f $file ]]; then
-                matched_files+=($file)
+        # Using a subshell for `files=( ${~pattern} )` is safer if patterns are complex or numerous
+        local current_files
+        current_files=(${~pattern})
+        for file in ${current_files[@]}; do
+            if [[ -f $file ]]; then # Ensure it's a file
+                matched_files+=("$file")
             fi
         done
     fi
 done
 
+# Deduplicate matched_files (in case patterns overlap)
+typeset -U matched_files
+
 # Process files, excluding any that match exclusion patterns
-for file in $matched_files; do
+for file in "${matched_files[@]}"; do
     excluded=false
-    for exclude in $exclude_patterns; do
-        if [[ $file = ${~exclude} ]]; then
+    for exclude_pattern in "${exclude_patterns[@]}"; do
+        # Ensure exclude pattern is also tilde-expanded if necessary for matching
+        if [[ $file == ${~exclude_pattern} ]]; then
             excluded=true
+            ((excluded_file_count++))
+            if [[ $verbose == true ]]; then
+                echo "Excluding file (matches '$exclude_pattern'): $file"
+            fi
             break
         fi
     done
 
     if [[ $excluded == false ]]; then
         process_file "$file"
-        ((total_matches++))
     fi
 done
 
-echo "Found $total_matches matching files"
-echo "Processed $processed_files files into $output_file"
+echo "\nInitial files matching include patterns: ${#matched_files[@]}"
+echo "Number of files excluded: $excluded_file_count"
+echo "Successfully processed $processed_files files into $output_file"
 
 # Get and display the output file size
-file_size=$(du -h "$output_file" | cut -f1)
-echo "Output file size: $file_size"
+if [[ -f "$output_file" ]]; then
+    file_size=$(du -h "$output_file" | cut -f1)
+    echo "Output file size: $file_size"
+else
+    echo "Output file $output_file not created or empty."
+fi
 
 # Copy to clipboard if requested
 if [[ $clipboard == true ]]; then
-    pbcopy < "$output_file"
-    echo "Content copied to clipboard"
+    if command -v pbcopy &> /dev/null; then
+        pbcopy < "$output_file"
+        echo "Content copied to clipboard"
+    else
+        echo "Warning: pbcopy command not found. Cannot copy to clipboard." >&2
+    fi
 fi

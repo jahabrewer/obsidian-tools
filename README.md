@@ -37,7 +37,7 @@ note-compiler.sh [options] <output-file> <source-glob> [<exclude-glob> ...]
 - `-f, --config`     Specify an alternative config file (default: ~/.note-compiler.yaml)
 
 ### Example
-```zsh
+```sh
 note-compiler.sh -v ~/compiled_notes/notes_$(date +%Y-%m-%d_%H%M%S).txt "**/*.md" "!.obsidian/**"
 ```
 

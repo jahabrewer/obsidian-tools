@@ -1,10 +1,6 @@
 # Sample configuration file for note-compiler
 # Copy this to ~/.note-compiler.yaml to use
 
-# Default flags (optional)
-#verbose: false
-#clipboard: false
-
 # Output file path - REQUIRED on command line if not specified here
 # Supports shell commands in $(...) syntax
 #output_file_path: "~/compiled_notes/notes_$(date +%Y-%m-%d_%H%M%S).txt"
@@ -12,5 +8,6 @@
 # Glob patterns - REQUIRED on command line if not specified here
 # These define which files will be included in the compilation
 #glob_patterns:
+#  - "~/Documents/My Vault/**/*.md"
 #  - "!.obsidian/**"  # Exclude .obsidian directory
 #  - "!templates/**"  # Exclude templates directory
