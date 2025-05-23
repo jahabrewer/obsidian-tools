@@ -6,7 +6,7 @@ verbose=false
 clipboard=false
 config_file=~/.note-compiler.yaml
 
-# Config file values (set via ~/.note-compiler.config)
+# Config file values (set via ~/.note-compiler.yaml)
 config_output_file_path=""
 config_glob_patterns=()
 
@@ -66,7 +66,7 @@ if [[ $# -eq 0 ]]; then
     echo "Options:"
     echo "  -v, --verbose    List all files included in the compilation"
     echo "  -c, --clipboard  Copy the resulting file to clipboard"
-    echo "  -f, --config     Specify an alternative config file (default: ~/.note-compiler.config)"
+    echo "  -f, --config     Specify an alternative config file (default: ~/.note-compiler.yaml)"
     echo
     echo "Example: $0 [-cv] output.md \"**/*.md\" \"!.obsidian/**\""
     echo
