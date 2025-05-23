@@ -1,0 +1,83 @@
+name: Bump Homebrew Formulae
+
+on:
+  release:
+    types: [published] # Run when a new GitHub release is published
+
+jobs:
+  update_formulae:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get Version from Tag
+        id: get_version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT # Removes 'v' prefix from tag, e.g. v0.1.0 -> 0.1.0
+
+      - name: Set up Git user
+        run: |
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions-bot@users.noreply.github.com"
+
+      - name: Checkout Homebrew Tap Repository
+        uses: actions/checkout@v4
+        with:
+          repository: jahabrewer/homebrew-obsidian-tools # Your tap repository
+          path: homebrew-tap # Checkout into a specific directory
+          token: ${{ secrets.TAP_REPO_PAT }} # PAT with repo scope for the tap repo
+
+      - name: Calculate SHA256 for new release
+        id: calculate_sha
+        run: |
+          RELEASE_VERSION="${{ steps.get_version.outputs.version }}"
+          # Construct tarball URL based on the current repository (jahabrewer/obsidian-tools) and the release tag
+          TARBALL_URL="https://github.com/${{ github.repository }}/archive/refs/tags/v${RELEASE_VERSION}.tar.gz"
+          echo "Downloading from $TARBALL_URL"
+          curl -sSL -o release.tar.gz "$TARBALL_URL"
+          NEW_SHA256=$(sha256sum release.tar.gz | awk '{ print $1 }')
+          echo "sha256=${NEW_SHA256}" >> $GITHUB_OUTPUT
+          echo "Calculated SHA256: ${NEW_SHA256} for v${RELEASE_VERSION}.tar.gz"
+          rm release.tar.gz
+
+      - name: Update Formula Files in Tap Repository
+        run: |
+          TAP_CHECKOUT_PATH="homebrew-tap"
+          FORMULA_NAMES=("note-compiler.rb" "obsidian-backup.rb") # Array of your formula filenames
+          RELEASE_VERSION="${{ steps.get_version.outputs.version }}"
+          NEW_SHA256="${{ steps.calculate_sha.outputs.sha256 }}"
+          # This is the URL that will be written into the formula files
+          TARBALL_URL_IN_FORMULA="https://github.com/${{ github.repository }}/archive/refs/tags/v${RELEASE_VERSION}.tar.gz"
+
+          echo "Updating formulae to version ${RELEASE_VERSION}"
+          echo "New SHA256: ${NEW_SHA256}"
+          echo "New Tarball URL for formula: ${TARBALL_URL_IN_FORMULA}"
+
+          for FORMULA_NAME in "${FORMULA_NAMES[@]}"; do
+            FORMULA_PATH="${TAP_CHECKOUT_PATH}/${FORMULA_NAME}"
+            echo "Processing ${FORMULA_PATH}"
+
+            # Update the url line
+            sed -i -E "s|^  url \".*\"$|  url \"${TARBALL_URL_IN_FORMULA}\"|" "${FORMULA_PATH}"
+            # Update the sha256 line
+            sed -i -E "s|^  sha256 \".*\"$|  sha256 \"${NEW_SHA256}\"|" "${FORMULA_PATH}"
+            # Optional: If you decide to include an explicit version line in your formula, uncomment and adapt one of these:
+            # sed -i -E "s|^  # version \".*\"$|  version \"${RELEASE_VERSION}\"|" "${FORMULA_PATH}" # If commented out
+            # sed -i -E "s|^  version \".*\"$|  version \"${RELEASE_VERSION}\"|" "${FORMULA_PATH}"   # If active
+
+            echo "--- Contents of updated ${FORMULA_PATH} ---"
+            cat "${FORMULA_PATH}"
+            echo "------------------------------------------"
+          done
+
+          cd "${TAP_CHECKOUT_PATH}"
+          # Add all changes within the tap checkout directory (e.g. both formula files)
+          git add .
+
+          # Check if there are changes to commit
+          if git diff --staged --quiet; then
+            echo "Formulae are already up-to-date with v${RELEASE_VERSION}."
+          else
+            git commit -m "Bump formulae to v${RELEASE_VERSION}
+
+            Source: ${{ github.server_url }}/${{ github.repository }}/releases/tag/v${RELEASE_VERSION}"
+            git push
+            echo "Pushed updated formulae for v${RELEASE_VERSION} to tap repository."
+          fi
