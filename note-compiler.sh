@@ -1,5 +1,35 @@
 #!/bin/zsh
 
+# Version placeholder - this will be replaced by the build process for releases
+__SCRIPT_VERSION__="DEVELOPMENT_VERSION_#_NEEDS_REPLACEMENT_BY_BUILD_#"
+
+# --- Version Handling ---
+if [[ "$1" == "--version" ]]; then
+  if [[ "$__SCRIPT_VERSION__" != "DEVELOPMENT_VERSION_#_NEEDS_REPLACEMENT_BY_BUILD_#" ]]; then
+    echo "$__SCRIPT_VERSION__"
+  elif command -v git &>/dev/null; then # Check if git command exists
+    if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then # Check if inside a git repo
+      version=$(git describe --tags --abbrev=0 2>/dev/null)
+      if [[ -n "$version" ]]; then
+        echo "$version (dev environment)"
+      else
+        commit_hash=$(git rev-parse --short HEAD 2>/dev/null)
+        if [[ -n "$commit_hash" ]]; then
+          echo "dev-$commit_hash (no tags found, dev environment)"
+        else
+          echo "unknown (git repository, but no tags or commits found, dev environment)"
+        fi
+      fi
+    else
+      echo "unknown (not a git repository, dev environment)"
+    fi
+  else
+    echo "unknown (git command not found, dev environment - $__SCRIPT_VERSION__)"
+  fi
+  exit 0
+fi
+# --- End Version Handling ---
+
 # Default values for script logic
 verbose=false
 clipboard=false
@@ -17,12 +47,14 @@ print_usage() {
     cat >&2 <<EOF
 Usage: $0 [options] <output_file> <glob_pattern...>
        $0 [options]  # If output_file and glob_patterns are in config
+       $0 --version  # Show version information
 
 Options:
   -v, --verbose    List all files included in the compilation.
   -c, --clipboard  Copy the resulting file to clipboard.
   -f, --config F   Specify an alternative config file.
                    (Default: ~/.note-compiler.yaml)
+  --version        Show version information and exit.
 
 Example: $0 -v -f myconfig.yaml output.md "**/*.md" "!.obsidian/**"
 
