@@ -147,6 +147,9 @@ read_config
 
 # Log config values AFTER they've been fully resolved (CLI + config file)
 if $verbose ; then # Show config log only if verbose is ultimately true
+    # Print version information first in verbose mode
+    echo "note-compiler version: $__SCRIPT_VERSION__"
+    echo "----------------------------------------"
     log_config_values
 fi
 
