@@ -141,15 +141,19 @@ if (( $#_cli_config_file_values )); then
 fi
 # --- End of Argument Parsing ---
 
+# Log config values AFTER they've been fully resolved (CLI + config file)
+if $verbose ; then # Show config log only if verbose is ultimately true
+    # Print version information first in verbose mode
+    echo "note-compiler $__SCRIPT_VERSION__"
+    echo ""
+fi
+
 # Read config (CLI options like -f <new_config> will have updated `config_file` by now)
 # `verbose` and `clipboard` may be further modified by read_config if not set by CLI.
 read_config
 
 # Log config values AFTER they've been fully resolved (CLI + config file)
 if $verbose ; then # Show config log only if verbose is ultimately true
-    # Print version information first in verbose mode
-    echo "note-compiler version: $__SCRIPT_VERSION__"
-    echo "----------------------------------------"
     log_config_values
 fi
 
