@@ -3,33 +3,6 @@
 # Version placeholder - this will be replaced by the build process for releases
 __SCRIPT_VERSION__="DEVELOPMENT_VERSION_#_NEEDS_REPLACEMENT_BY_BUILD_#"
 
-# --- Version Handling ---
-if [[ "$1" == "--version" ]]; then
-  if [[ "$__SCRIPT_VERSION__" != "DEVELOPMENT_VERSION_#_NEEDS_REPLACEMENT_BY_BUILD_#" ]]; then
-    echo "$__SCRIPT_VERSION__"
-  elif command -v git &>/dev/null; then # Check if git command exists
-    if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then # Check if inside a git repo
-      version=$(git describe --tags --abbrev=0 2>/dev/null)
-      if [[ -n "$version" ]]; then
-        echo "$version (dev environment)"
-      else
-        commit_hash=$(git rev-parse --short HEAD 2>/dev/null)
-        if [[ -n "$commit_hash" ]]; then
-          echo "dev-$commit_hash (no tags found, dev environment)"
-        else
-          echo "unknown (git repository, but no tags or commits found, dev environment)"
-        fi
-      fi
-    else
-      echo "unknown (not a git repository, dev environment)"
-    fi
-  else
-    echo "unknown (git command not found, dev environment - $__SCRIPT_VERSION__)"
-  fi
-  exit 0
-fi
-# --- End Version Handling ---
-
 # Default values for script logic
 verbose=false
 clipboard=false
@@ -117,6 +90,7 @@ zmodload zsh/zutil
 local -a _cli_verbose_flags
 local -a _cli_clipboard_flags
 local -a _cli_config_file_values # Stores value(s) from -f or --config
+local -a _cli_version_flags
 
 # -D: Deletes parsed options from $@, leaving only positional args.
 # -F: Fails if an unknown option is encountered.
@@ -124,7 +98,34 @@ zparseopts -D -F -- \
   {v,-verbose}=_cli_verbose_flags \
   {c,-clipboard}=_cli_clipboard_flags \
   {f,-config}:=_cli_config_file_values \
+  -version=_cli_version_flags \
   || { print_usage; exit 1; } # On failure (e.g., unknown option), print usage and exit.
+
+# Handle --version flag first
+if (( $#_cli_version_flags )); then
+  if [[ "$__SCRIPT_VERSION__" != "DEVELOPMENT_VERSION_#_NEEDS_REPLACEMENT_BY_BUILD_#" ]]; then
+    echo "$__SCRIPT_VERSION__"
+  elif command -v git &>/dev/null; then # Check if git command exists
+    if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then # Check if inside a git repo
+      version=$(git describe --tags --abbrev=0 2>/dev/null)
+      if [[ -n "$version" ]]; then
+        echo "$version (dev environment)"
+      else
+        commit_hash=$(git rev-parse --short HEAD 2>/dev/null)
+        if [[ -n "$commit_hash" ]]; then
+          echo "dev-$commit_hash (no tags found, dev environment)"
+        else
+          echo "unknown (git repository, but no tags or commits found, dev environment)"
+        fi
+      fi
+    else
+      echo "unknown (not a git repository, dev environment)"
+    fi
+  else
+    echo "unknown (git command not found, dev environment - $__SCRIPT_VERSION__)"
+  fi
+  exit 0
+fi
 
 # Update script's main variables based on parsed CLI options
 if (( $#_cli_verbose_flags )); then
