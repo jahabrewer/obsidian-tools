@@ -28,4 +28,4 @@ jobs:
           # Or, you can specify a file containing release notes, e.g., release_notes.md
           # body_path: "CHANGELOG.md" # Example: if you want to use a changelog file
           # (Optional) If you want to generate release notes from commit messages (requires conventional commits for best results)
-          # generate_release_notes: true
+          generate_release_notes: true
