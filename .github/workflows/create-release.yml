@@ -1,0 +1,31 @@
+name: Create GitHub Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*' # Triggers on tags like v1.0.0, v0.2.1, etc.
+
+jobs:
+  build:
+    name: Create Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required to create a release
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ secrets.RELEASE_WORKFLOW_PAT }}
+          # (Optional) Set to true to create a draft release, false to publish directly
+          draft: false
+          # (Optional) Set to true to create a pre-release
+          prerelease: false
+          # (Optional) If you have an annotated tag, its message can be used as the release body
+          # Or, you can specify a file containing release notes, e.g., release_notes.md
+          # body_path: "CHANGELOG.md" # Example: if you want to use a changelog file
+          # (Optional) If you want to generate release notes from commit messages (requires conventional commits for best results)
+          # generate_release_notes: true
