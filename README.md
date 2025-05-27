@@ -21,17 +21,14 @@ A shell script for compiling markdown notes from multiple files into a single ou
 - (Optional) `pbcopy` for clipboard support (macOS)
 
 #### Installation
-1. Download or clone this repository:
-   ```sh
-   git clone https://github.com/jahabrewer/obsidian-tools.git
-   cd obsidian-tools
-   chmod +x note-compiler.sh obsidian-backup.sh
-   ```
-2. (Optional) Move the scripts to a directory in your `$PATH`:
-   ```sh
-   mv note-compiler.sh /usr/local/bin/note-compiler
-   mv obsidian-backup.sh /usr/local/bin/obsidian-backup
-   ```
+Install `note-compiler` using Homebrew:
+
+```sh
+brew tap jahabrewer/obsidian-tools
+brew install note-compiler
+```
+
+This will install the `note-compiler` script and make it available in your `$PATH`.
 
 #### Usage
 ```sh
