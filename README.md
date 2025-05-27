@@ -35,15 +35,23 @@ This will install the `note-compiler` script and make it available in your `$PAT
 note-compiler.sh [options] <output-file> <source-glob> [<exclude-glob> ...]
 ```
 
+If `output_file_path` and `glob_patterns` are defined in your configuration file (see "Configuration" below), you can also run the script with just options:
+```sh
+note-compiler.sh [options]
+```
+
 ##### Options
-- `-v, --verbose`    List all files included in the compilation
+- `-v, --verbose`    Log extra information (e.g., included files, config values, config sources)
 - `-c, --clipboard`  Copy output to clipboard (macOS only)
 - `-f, --config`     Specify an alternative config file (default: ~/.note-compiler.yaml)
+- `--version`        Show version information and exit.
 
 ##### Example
 ```sh
 note-compiler.sh -v ~/compiled_notes/notes_$(date +%Y-%m-%d_%H%M%S).txt "**/*.md" "!.obsidian/**"
 ```
+
+Note on patterns: The script uses Zsh's extended globbing. Patterns starting with `!` (like `"!.obsidian/**"` in the example) are treated as exclusion patterns.
 
 #### Configuration
 Supports a YAML config file at `~/.note-compiler.yaml` for default options and patterns. See [sample-config.yaml](examples/sample-config.yaml) for an example.
