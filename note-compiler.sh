@@ -175,7 +175,9 @@ else
 fi
 
 # Create output directory if it doesn't exist
-output_dir=$(dirname "$output_file_path")
+# Expand ~ in output_file_path before using dirname or mkdir
+expanded_output_file_path=$(eval echo "$output_file_path")
+output_dir=$(dirname "$expanded_output_file_path")
 mkdir -p "$output_dir" || { echo "Error: Could not create directory $output_dir" >&2 ; exit 1; }
 
 # Create/clear the output file (eval is used to allow dynamic paths like those with $(date))
