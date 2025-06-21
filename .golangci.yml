@@ -1,0 +1,44 @@
+run:
+  timeout: 5m
+  go: "1.21"
+
+linters-settings:
+  govet:
+    check-shadowing: true
+  gocyclo:
+    min-complexity: 15
+  misspell:
+    locale: US
+  lll:
+    line-length: 120
+
+linters:
+  enable:
+    - bodyclose
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - typecheck
+    - unused
+    - gocyclo
+    - gofmt
+    - goimports
+    - misspell
+    - lll
+    - unconvert
+    - unparam
+    - gosec
+  disable:
+    - structcheck # deprecated
+    - varcheck   # deprecated
+    - deadcode   # deprecated
+
+issues:
+  exclude-rules:
+    # Exclude some linters from running on tests files
+    - path: _test\.go
+      linters:
+        - gosec
+        - lll 
