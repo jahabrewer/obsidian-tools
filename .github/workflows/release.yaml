@@ -33,7 +33,7 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.TAP_REPO_PAT }}
 
   test-cross-platform:
     runs-on: ${{ matrix.os }}
@@ -57,13 +57,6 @@ jobs:
       - name: Build note-compiler
         run: go build -o note-compiler ./cmd/note-compiler
       
-      - name: Build obsidian-backup
-        run: go build -o obsidian-backup ./cmd/obsidian-backup
-      
       - name: Test note-compiler version
-        run: ./note-compiler --version
-        shell: bash
-      
-      - name: Test obsidian-backup version  
-        run: ./obsidian-backup --version
+        run: ./note-compiler version
         shell: bash 
