@@ -308,5 +308,6 @@ func expandPath(path string) string {
 		return path
 	}
 
-	return buf.String()
+	// Clean the path to handle cross-platform path separators
+	return filepath.Clean(buf.String())
 }
