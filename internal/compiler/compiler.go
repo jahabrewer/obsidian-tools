@@ -17,6 +17,7 @@ import (
 type Config struct {
 	Verbose      bool
 	Clipboard    bool
+	ListExcluded bool
 	ConfigFile   string
 	OutputFile   string
 	GlobPatterns []string
@@ -25,6 +26,7 @@ type Config struct {
 type FileConfig struct {
 	OutputFilePath string   `yaml:"output_file_path"`
 	GlobPatterns   []string `yaml:"glob_patterns"`
+	ListExcluded   bool     `yaml:"list_excluded"`
 }
 
 type Compiler struct {
@@ -58,6 +60,11 @@ func (c *Compiler) Run() error {
 	// Load configuration
 	if err := c.loadConfig(); err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Apply file config values if not set via command line
+	if !c.config.ListExcluded && c.fileConfig.ListExcluded {
+		c.config.ListExcluded = c.fileConfig.ListExcluded
 	}
 
 	// Determine output file
@@ -145,6 +152,7 @@ func (c *Compiler) loadConfig() error {
 		fmt.Printf("Config file values:\n")
 		fmt.Printf("  output_file_path: %s\n", c.fileConfig.OutputFilePath)
 		fmt.Printf("  glob_patterns: %v\n", c.fileConfig.GlobPatterns)
+		fmt.Printf("  list_excluded: %t\n", c.fileConfig.ListExcluded)
 	}
 
 	return nil
@@ -221,18 +229,22 @@ func (c *Compiler) processFiles(outFile io.Writer, globPatterns []string) (int, 
 	for _, file := range uniqueFiles {
 		// Check if file should be excluded
 		excluded := false
+		var matchedPattern string
 		for _, excludePattern := range excludePatterns {
 			if matched, _ := filepath.Match(excludePattern, file); matched {
 				excluded = true
+				matchedPattern = excludePattern
 				excludedCount++
-				if c.config.Verbose {
-					fmt.Printf("Excluding file (matches '%s'): %s\n", excludePattern, file)
-				}
 				break
 			}
 		}
 
-		if !excluded {
+		if excluded {
+			// Show excluded files if verbose mode is on OR if ListExcluded is specifically requested
+			if c.config.Verbose || c.config.ListExcluded {
+				fmt.Printf("Excluding file (matches '%s'): %s\n", matchedPattern, file)
+			}
+		} else {
 			if err := c.processFile(outFile, file); err != nil {
 				return processedCount, excludedCount, err
 			}

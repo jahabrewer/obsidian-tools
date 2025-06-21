@@ -30,6 +30,7 @@ Supports glob patterns, exclusions, YAML config, clipboard copy, and verbose out
 	// Flags
 	rootCmd.Flags().BoolP("verbose", "v", false, "list all files included in the compilation")
 	rootCmd.Flags().BoolP("clipboard", "c", false, "copy the resulting file to clipboard")
+	rootCmd.Flags().BoolP("list-excluded", "e", false, "list files excluded from compilation")
 	rootCmd.Flags().StringP("config", "f", "", "specify an alternative config file (default: ~/.note-compiler.yaml)")
 
 	// Version command
@@ -45,6 +46,7 @@ Supports glob patterns, exclusions, YAML config, clipboard copy, and verbose out
 	// Bind flags to viper (ignore errors as they are not critical for flag binding)
 	_ = viper.BindPFlag("verbose", rootCmd.Flags().Lookup("verbose"))
 	_ = viper.BindPFlag("clipboard", rootCmd.Flags().Lookup("clipboard"))
+	_ = viper.BindPFlag("list-excluded", rootCmd.Flags().Lookup("list-excluded"))
 	_ = viper.BindPFlag("config", rootCmd.Flags().Lookup("config"))
 
 	if err := rootCmd.Execute(); err != nil {
@@ -54,9 +56,10 @@ Supports glob patterns, exclusions, YAML config, clipboard copy, and verbose out
 
 func runCompiler(cmd *cobra.Command, args []string) error {
 	config := &compiler.Config{
-		Verbose:    viper.GetBool("verbose"),
-		Clipboard:  viper.GetBool("clipboard"),
-		ConfigFile: viper.GetString("config"),
+		Verbose:      viper.GetBool("verbose"),
+		Clipboard:    viper.GetBool("clipboard"),
+		ListExcluded: viper.GetBool("list-excluded"),
+		ConfigFile:   viper.GetString("config"),
 	}
 
 	// Parse arguments
