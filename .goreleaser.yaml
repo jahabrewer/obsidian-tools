@@ -1,0 +1,110 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  # note-compiler binary
+  - id: note-compiler
+    binary: note-compiler
+    main: ./cmd/note-compiler
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - "386"
+      - amd64
+      - arm
+      - arm64
+    ignore:
+      - goos: darwin
+        goarch: "386"
+      - goos: windows
+        goarch: arm
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+
+  # obsidian-backup binary
+  - id: obsidian-backup
+    binary: obsidian-backup
+    main: ./cmd/obsidian-backup
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - "386"
+      - amd64
+      - arm
+      - arm64
+    ignore:
+      - goos: darwin
+        goarch: "386"
+      - goos: windows
+        goarch: arm
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+
+archives:
+  - format: tar.gz
+    # this name template makes the OS and Arch compatible with the results of `uname`.
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    # use zip for windows archives
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+
+# Homebrew configuration
+brews:
+  - name: obsidian-tools
+    repository:
+      owner: jahabrewer
+      name: homebrew-obsidian-tools
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    url_template: "https://github.com/jahabrewer/note-compiler/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+    directory: Formula
+    homepage: "https://github.com/jahabrewer/note-compiler"
+    description: "Tools for working with Obsidian vaults"
+    license: "GPL-3.0"
+    skip_upload: auto
+    # Install both binaries
+    install: |
+      bin.install "note-compiler"
+      bin.install "obsidian-backup"
+    test: |
+      system "#{bin}/note-compiler", "--version"
+      system "#{bin}/obsidian-backup", "--version" 
