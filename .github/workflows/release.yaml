@@ -58,5 +58,5 @@ jobs:
         run: go build -o note-compiler ./cmd/note-compiler
       
       - name: Test note-compiler version
-        run: ./note-compiler --version
+        run: ./note-compiler version
         shell: bash 

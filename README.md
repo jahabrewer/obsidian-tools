@@ -31,23 +31,30 @@ Download the latest release for your platform from the [releases page](https://g
 
 #### Usage
 ```sh
-note-compiler [options] <output-file> <source-glob> [<exclude-glob> ...]
+note-compiler [flags] <output-file> <glob-pattern>...
 ```
 
 If `output_file_path` and `glob_patterns` are defined in your configuration file (see "Configuration" below), you can also run with just options:
 ```sh
-note-compiler [options]
+note-compiler [flags]
 ```
 
 ##### Options
-- `-v, --verbose`    Log extra information (e.g., included files, config values, config sources)
-- `-c, --clipboard`  Copy output to clipboard
+- `-v, --verbose`    List all files included in the compilation
+- `-c, --clipboard`  Copy the resulting file to clipboard
 - `-f, --config`     Specify an alternative config file (default: ~/.note-compiler.yaml)
-- `--version`        Show version information and exit.
+- `-h, --help`       Help for note-compiler
 
-##### Example
+##### Commands
+- `note-compiler version`     Show version information
+- `note-compiler completion`  Generate autocompletion script
+- `note-compiler help`        Help about any command
+
+##### Examples
 ```sh
 note-compiler -v ~/compiled_notes/notes_$(date +%Y-%m-%d_%H%M%S).txt "**/*.md" "!.obsidian/**"
+note-compiler -c output.md "*.md"
+note-compiler version
 ```
 
 Note on patterns: The tool uses standard glob patterns. Patterns starting with `!` (like `"!.obsidian/**"` in the example) are treated as exclusion patterns.
