@@ -584,8 +584,10 @@ func TestExpandPath(t *testing.T) {
 	})
 
 	t.Run("no template", func(t *testing.T) {
-		result := expandPath("/absolute/path/file.txt")
-		expected := "/absolute/path/file.txt"
+		input := "/absolute/path/file.txt"
+		result := expandPath(input)
+		// Since filepath.Clean normalizes paths, expect the cleaned version
+		expected := filepath.Clean(input)
 		if result != expected {
 			t.Errorf("Expected %s, got %s", expected, result)
 		}
@@ -632,7 +634,8 @@ func TestExpandPath(t *testing.T) {
 		defer os.Unsetenv("TEST_VAR")
 
 		result := expandPath(`/path/{{.Env "TEST_VAR"}}/file.txt`)
-		expected := "/path/test_value/file.txt"
+		// Since filepath.Clean normalizes paths, expect the cleaned version
+		expected := filepath.Clean("/path/test_value/file.txt")
 		if result != expected {
 			t.Errorf("Expected %s, got %s", expected, result)
 		}
