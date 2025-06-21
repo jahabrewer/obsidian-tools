@@ -31,9 +31,15 @@ linters:
     - unparam
     - gosec
   disable:
-    - structcheck # deprecated
-    - varcheck   # deprecated
-    - deadcode   # deprecated
+  settings:
+    errcheck:
+      exclude-functions:
+        - viper.BindPFlag
+        - viper.GetString
+        - viper.GetBool
+        - viper.GetStringMap
+        - viper.GetStringMapString
+        - viper.GetStringMapStringSlice
 
 issues:
   exclude-rules:

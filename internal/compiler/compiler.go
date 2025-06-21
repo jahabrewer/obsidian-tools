@@ -80,8 +80,8 @@ func (c *Compiler) Run() error {
 	}
 
 	// Create output directory
-	if err := os.MkdirAll(filepath.Dir(outputFile), 0755); err != nil {
-		return fmt.Errorf("failed to create output directory: %w", err)
+	if mkdirErr := os.MkdirAll(filepath.Dir(outputFile), 0755); mkdirErr != nil {
+		return fmt.Errorf("failed to create output directory: %w", mkdirErr)
 	}
 
 	// Create/clear output file

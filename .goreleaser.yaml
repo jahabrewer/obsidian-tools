@@ -76,8 +76,18 @@ brews:
     description: "A cross-platform Go CLI tool for compiling markdown notes"
     license: "GPL-3.0"
     skip_upload: auto
-    # Install note-compiler binary
+    # Install note-compiler binary and completions
     install: |
       bin.install "note-compiler"
+      
+      # Generate and install shell completions
+      output = Utils.popen_read("#{bin}/note-compiler completion bash")
+      (bash_completion/"note-compiler").write output
+      
+      output = Utils.popen_read("#{bin}/note-compiler completion zsh")
+      (zsh_completion/"_note-compiler").write output
+      
+      output = Utils.popen_read("#{bin}/note-compiler completion fish")
+      (fish_completion/"note-compiler.fish").write output
     test: |
       system "#{bin}/note-compiler", "--version" 

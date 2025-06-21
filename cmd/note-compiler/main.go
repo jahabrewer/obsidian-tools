@@ -42,10 +42,10 @@ Supports glob patterns, exclusions, YAML config, clipboard copy, and verbose out
 	}
 	rootCmd.AddCommand(versionCmd)
 
-	// Bind flags to viper
-	viper.BindPFlag("verbose", rootCmd.Flags().Lookup("verbose"))
-	viper.BindPFlag("clipboard", rootCmd.Flags().Lookup("clipboard"))
-	viper.BindPFlag("config", rootCmd.Flags().Lookup("config"))
+	// Bind flags to viper (ignore errors as they are not critical for flag binding)
+	_ = viper.BindPFlag("verbose", rootCmd.Flags().Lookup("verbose"))
+	_ = viper.BindPFlag("clipboard", rootCmd.Flags().Lookup("clipboard"))
+	_ = viper.BindPFlag("config", rootCmd.Flags().Lookup("config"))
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
