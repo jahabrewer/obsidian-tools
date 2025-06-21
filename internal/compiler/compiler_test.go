@@ -575,6 +575,9 @@ func TestExpandPath(t *testing.T) {
 		homeDir, _ := os.UserHomeDir()
 		result := expandPath("{{.Home}}/test/file.txt")
 		expected := filepath.Join(homeDir, "test", "file.txt")
+		// Normalize both paths to handle cross-platform differences
+		result = filepath.Clean(result)
+		expected = filepath.Clean(expected)
 		if result != expected {
 			t.Errorf("Expected %s, got %s", expected, result)
 		}
