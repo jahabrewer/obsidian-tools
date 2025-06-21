@@ -40,7 +40,7 @@ jobs:
       - name: Update Formula Files in Tap Repository
         run: |
           TAP_CHECKOUT_PATH="homebrew-tap"
-          FORMULA_NAMES=("note-compiler.rb" "obsidian-backup.rb") # Array of your formula filenames
+          FORMULA_NAMES=("obsidian-backup.rb") # Array of your formula filenames (note-compiler.rb now handled by goreleaser)
           RELEASE_VERSION="${{ steps.get_version.outputs.version }}"
           NEW_SHA256="${{ steps.calculate_sha.outputs.sha256 }}"
           # This is the URL that will be written into the formula files
