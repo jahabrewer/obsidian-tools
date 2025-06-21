@@ -67,7 +67,7 @@ brews:
   - name: note-compiler
     repository:
       owner: jahabrewer
-      name: homebrew-note-compiler
+      name: homebrew-obsidian-tools
       branch: main
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     url_template: "https://github.com/jahabrewer/note-compiler/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
