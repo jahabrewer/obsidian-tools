@@ -90,4 +90,4 @@ brews:
       output = Utils.popen_read("#{bin}/note-compiler completion fish")
       (fish_completion/"note-compiler.fish").write output
     test: |
-      system "#{bin}/note-compiler", "--version" 
+      system "#{bin}/note-compiler", "version" 
