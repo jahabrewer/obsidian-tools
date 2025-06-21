@@ -94,6 +94,25 @@ make build
 make test
 ```
 
+##### Pre-Push Checks
+To ensure code quality, run all checks before pushing:
+```sh
+make pre-push
+```
+
+This will run:
+- Code formatting (`make fmt`)
+- Linting (`make lint`)
+- Tests (`make test`)
+
+##### Git Hooks Setup
+Install git hooks to automatically run pre-push checks:
+```sh
+./scripts/install-hooks.sh
+```
+
+After installation, these checks will run automatically before every push.
+
 ##### Creating a Release
 ```sh
 make release

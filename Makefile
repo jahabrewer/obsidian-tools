@@ -51,6 +51,14 @@ lint:
 	@echo "Running linter..."
 	@golangci-lint run
 
+# Install golangci-lint if not present
+install-lint:
+	@which golangci-lint > /dev/null || (echo "Installing golangci-lint..." && go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest)
+
+# Run all checks before pushing
+pre-push: install-lint fmt lint test
+	@echo "All pre-push checks passed ✅"
+
 # Format code
 fmt:
 	@echo "Formatting code..."
@@ -78,6 +86,8 @@ help:
 	@echo "  install-deps - Download and tidy dependencies"
 	@echo "  build-all    - Cross-platform builds"
 	@echo "  lint         - Run linter"
+	@echo "  install-lint - Install golangci-lint"
 	@echo "  fmt          - Format code"
+	@echo "  pre-push     - Run all pre-push checks"
 	@echo "  install      - Install binaries locally"
 	@echo "  help         - Show this help" 
