@@ -17,14 +17,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Debug directory structure
-        run: |
-          echo "Current directory: $(pwd)"
-          echo "Directory contents:"
-          ls -la
-          echo "cmd directory contents:"
-          ls -la cmd/ || echo "cmd directory not found"
-
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
