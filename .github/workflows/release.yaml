@@ -21,6 +21,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.21"
+          cache: true
 
       - name: Run tests
         run: go test -v ./...
@@ -50,20 +51,18 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
+          cache: true
       
       - name: Run tests
         run: go test -v ./...
       
-      - name: Build note-compiler
-        run: go build -o note-compiler ./cmd/note-compiler
+      - name: Build binaries
+        run: |
+          go build -v -o bin/note-compiler ./cmd/note-compiler
+          go build -v -o bin/obsidian-backup ./cmd/obsidian-backup
       
-      - name: Build obsidian-backup
-        run: go build -o obsidian-backup ./cmd/obsidian-backup
-      
-      - name: Test note-compiler version
-        run: ./note-compiler --version
-        shell: bash
-      
-      - name: Test obsidian-backup version  
-        run: ./obsidian-backup --version
+      - name: Test binaries
+        run: |
+          ./bin/note-compiler --version
+          ./bin/obsidian-backup --version
         shell: bash 
