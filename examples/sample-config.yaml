@@ -1,27 +1,25 @@
-# Configuration file for note-compiler
-# Location: ~/.note-compiler.yaml
+# Sample configuration file for note-compiler
+# Copy this to ~/.note-compiler.yaml to use
 
-# Output file path using Go templates:
+# Output file path - REQUIRED on command line if not specified here
+# Uses Go template syntax:
 # {{.Home}} - Home directory
 # {{.Date "format"}} - Current date/time with Go time format
 # {{.Env "VAR"}} - Environment variable
 output_file_path: "{{.Home}}/compiled_notes/notes_{{.Date \"2006-01-02_150405\"}}.txt"
 
-# Include patterns (Go templates supported)
-include_patterns:
-  - "{{.Home}}/Documents/**/*.md"
-  - "{{.Home}}/notes/**/*.txt"
-  - "{{.Env \"PROJECTS_DIR\"}}/**/*.md"
+# Glob patterns - REQUIRED on command line if not specified here
+# These define which files will be included in the compilation
+# Patterns starting with ! are exclusion patterns
+glob_patterns:
+  - "{{.Home}}/Documents/My Vault/**/*.md"
+  - "!{{.Home}}/Documents/My Vault/Archive/**"
+  - "!{{.Home}}/Documents/My Vault/.obsidian/**"
+  - "!**/_resources/**"
+  - "!**/.*"  # Hidden files
 
-# Exclude patterns (Go templates supported) 
-exclude_patterns:
-  - "**/node_modules/**"
-  - "**/.*"  # Hidden files
-  - "**/.git/**"
-  - "{{.Home}}/Documents/private/**"
-
-# Copy to clipboard after compilation
-copy_to_clipboard: true
+# Show excluded files in output (optional)
+# list_excluded: true
 
 # Examples of Go date formats:
 # {{.Date "2006-01-02"}}           -> 2024-03-15
