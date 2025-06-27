@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -763,6 +764,11 @@ func TestProcessFileErrors(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	t.Run("process file with read permission error", func(t *testing.T) {
+		// Skip on Windows as file permissions work differently
+		if runtime.GOOS == "windows" {
+			t.Skip("Skipping permission test on Windows")
+		}
+
 		// Create a file and remove read permissions
 		restrictedFile := filepath.Join(tempDir, "restricted.md")
 		err := os.WriteFile(restrictedFile, []byte("content"), 0000) // No permissions
@@ -797,9 +803,10 @@ func TestExpandPathEdgeCases(t *testing.T) {
 		// Test complex template with multiple functions
 		result := expandPath("{{.Home}}/{{.Date \"2006-01-02\"}}/{{.Env \"TEST_VAR\"}}")
 
-		expectedHome := os.Getenv("HOME")
+		// Get home directory using the same method as expandPath
+		expectedHome, _ := os.UserHomeDir()
 		expectedDate := time.Now().Format("2006-01-02")
-		expectedPath := expectedHome + "/" + expectedDate + "/test_value"
+		expectedPath := filepath.Join(expectedHome, expectedDate, "test_value")
 
 		if result != expectedPath {
 			t.Errorf("Expected %s, got %s", expectedPath, result)
@@ -1148,6 +1155,11 @@ func TestRunErrorHandling(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	t.Run("run with invalid output directory permissions", func(t *testing.T) {
+		// Skip on Windows as file permissions work differently
+		if runtime.GOOS == "windows" {
+			t.Skip("Skipping permission test on Windows")
+		}
+
 		// Try to create output in a directory that can't be written to
 		invalidDir := filepath.Join(tempDir, "readonly")
 		err := os.Mkdir(invalidDir, 0444) // Read-only directory
