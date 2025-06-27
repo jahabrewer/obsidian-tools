@@ -1,3 +1,8 @@
+---
+description: 
+globs: *.go
+alwaysApply: false
+---
 # Cross-Platform Compatibility Guidelines
 
 This Go project must run on Windows, macOS, and Linux. Always consider cross-platform compatibility when writing code and tests.
