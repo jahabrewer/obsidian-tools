@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/atotto/clipboard"
+	"github.com/bmatcuk/doublestar/v4"
 	"gopkg.in/yaml.v3"
 )
 
@@ -206,7 +207,8 @@ func (c *Compiler) processFiles(outFile io.Writer, globPatterns []string) (int, 
 
 	var allFiles []string
 	for _, pattern := range includePatterns {
-		matches, err := filepath.Glob(pattern)
+		// Use doublestar for proper ** recursive globbing
+		matches, err := doublestar.FilepathGlob(pattern)
 		if err != nil {
 			return 0, 0, fmt.Errorf("failed to glob pattern %s: %w", pattern, err)
 		}
@@ -227,11 +229,12 @@ func (c *Compiler) processFiles(outFile io.Writer, globPatterns []string) (int, 
 	excludedCount := 0
 
 	for _, file := range uniqueFiles {
-		// Check if file should be excluded
+		// Check if file should be excluded using doublestar for exclusion patterns too
 		excluded := false
 		var matchedPattern string
 		for _, excludePattern := range excludePatterns {
-			if matched, _ := filepath.Match(excludePattern, file); matched {
+			// Use doublestar.Match for consistent pattern matching
+			if matched, _ := doublestar.Match(excludePattern, file); matched {
 				excluded = true
 				matchedPattern = excludePattern
 				excludedCount++
