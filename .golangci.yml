@@ -3,8 +3,6 @@ run:
   go: "1.21"
 
 linters-settings:
-  govet:
-    check-shadowing: true
   gocyclo:
     min-complexity: 15
   misspell:
@@ -30,6 +28,7 @@ linters:
     - unconvert
     - unparam
     - gosec
+    - shadow
   disable:
   settings:
     errcheck:
