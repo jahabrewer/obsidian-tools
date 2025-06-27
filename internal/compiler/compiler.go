@@ -233,8 +233,12 @@ func (c *Compiler) processFiles(outFile io.Writer, globPatterns []string) (int, 
 		excluded := false
 		var matchedPattern string
 		for _, excludePattern := range excludePatterns {
+			// Normalize paths for comparison to handle cross-platform differences
+			normalizedFile := filepath.ToSlash(file)
+			normalizedPattern := filepath.ToSlash(excludePattern)
+
 			// Use doublestar.Match for consistent pattern matching
-			if matched, _ := doublestar.Match(excludePattern, file); matched {
+			if matched, _ := doublestar.Match(normalizedPattern, normalizedFile); matched {
 				excluded = true
 				matchedPattern = excludePattern
 				excludedCount++
