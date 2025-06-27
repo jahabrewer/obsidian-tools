@@ -1,5 +1,81 @@
----
-description:
-globs:
-alwaysApply: false
----
+# Cross-Platform Compatibility Guidelines
+
+This Go project must run on Windows, macOS, and Linux. Always consider cross-platform compatibility when writing code and tests.
+
+## File Path Handling
+
+**DO:**
+- Use `filepath.Join()` for constructing paths
+- Use `filepath.ToSlash()` to normalize paths for comparison
+- Use `filepath.Clean()` to normalize paths for display
+- Use `os.UserHomeDir()` instead of `os.Getenv("HOME")`
+- Test path handling with both forward slashes and backslashes
+
+**DON'T:**
+- Hardcode path separators (`/` or `\`)
+- Concatenate paths with string operations
+- Assume Unix-style paths in tests
+- Use `os.Getenv("HOME")` (doesn't work on Windows)
+
+## YAML Configuration Files
+
+**DO:**
+- Use forward slashes in YAML paths (even on Windows)
+- Convert Windows backslashes to forward slashes before writing to YAML:
+  ```go
+  yamlPath := strings.ReplaceAll(filepath.Join(dir, "file.txt"), "\\", "/")
+  ```
+
+**DON'T:**
+- Put raw Windows paths with backslashes directly in YAML (causes parsing errors)
+
+## File Permissions and Testing
+
+**DO:**
+- Skip permission tests on Windows: `if runtime.GOOS == "windows" { t.Skip("...") }`
+- Use `os.Chmod()` carefully and restore permissions in tests
+- Handle permission errors gracefully across platforms
+
+**DON'T:**
+- Assume Unix-style permissions work the same on Windows
+- Write tests that depend on specific file permission behavior
+
+## Testing Best Practices
+
+**DO:**
+- Use `t.TempDir()` for temporary directories (auto-cleanup)
+- Normalize expected vs actual paths before comparison
+- Add OS-specific conditionals for platform-dependent behavior
+- Test glob patterns with both path separator styles
+
+**DON'T:**
+- Hardcode expected paths in test assertions
+- Assume all platforms handle errors the same way
+
+## Pattern Matching
+
+**DO:**
+- Normalize paths before pattern matching:
+  ```go
+  normalizedFile := filepath.ToSlash(file)
+  normalizedPattern := filepath.ToSlash(pattern)
+  ```
+- Use the `doublestar` library consistently for glob matching
+
+## Common Windows Issues
+
+1. **Backslashes in paths**: Use `filepath` package functions
+2. **YAML parsing errors**: Convert backslashes to forward slashes
+3. **Permission handling**: Different behavior, skip tests if needed
+4. **Case sensitivity**: Windows is case-insensitive, others aren't
+5. **Path length limits**: Windows has shorter path limits
+6. **Reserved filenames**: Windows has reserved names like CON, PRN, etc.
+
+## Key Test Files
+
+Reference these files when working on cross-platform compatibility:
+- [cmd/note-compiler/main_test.go](mdc:cmd/note-compiler/main_test.go) - CLI tests with config file handling
+- [internal/compiler/compiler_test.go](mdc:internal/compiler/compiler_test.go) - Core compiler tests with path handling
+- [internal/compiler/compiler.go](mdc:internal/compiler/compiler.go) - Main compiler logic with file processing
+
+**Remember:** If a test fails only on Windows (or only on Unix), it's likely a cross-platform compatibility issue!
