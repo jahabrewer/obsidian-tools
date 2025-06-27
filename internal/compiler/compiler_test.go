@@ -8,8 +8,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/bmatcuk/doublestar/v4"
 )
 
 func TestNew(t *testing.T) {
@@ -710,6 +708,42 @@ func TestTemplateData(t *testing.T) {
 	})
 }
 
+// verifyIncludedFiles2 checks that all expected files are in the included list (alternative implementation)
+func verifyIncludedFiles2(t *testing.T, included, expectedIncluded []string) {
+	if len(included) != len(expectedIncluded) {
+		t.Errorf("Expected %d included files, got %d", len(expectedIncluded), len(included))
+	}
+
+	for _, expected := range expectedIncluded {
+		found := false
+		for _, actual := range included {
+			if actual == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected %s to be included", expected)
+		}
+	}
+}
+
+// verifyExcludedFiles2 checks that all expected files are in the excluded list (alternative implementation)
+func verifyExcludedFiles2(t *testing.T, excluded, expectedExcluded []string) {
+	for _, expected := range expectedExcluded {
+		found := false
+		for _, actual := range excluded {
+			if actual == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected %s to be excluded", expected)
+		}
+	}
+}
+
 // TestRecursiveGlobbingUnit tests the core logic without filesystem operations
 func TestRecursiveGlobbingUnit(t *testing.T) {
 	tests := []struct {
@@ -764,68 +798,9 @@ func TestRecursiveGlobbingUnit(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Simulate the pattern matching logic
-			var included, excluded []string
-
-			for _, file := range tt.mockFiles {
-				// Check include patterns
-				matchesInclude := false
-				for _, pattern := range tt.includePatterns {
-					if matched, _ := doublestar.Match(pattern, file); matched {
-						matchesInclude = true
-						break
-					}
-				}
-
-				if !matchesInclude {
-					continue
-				}
-
-				// Check exclude patterns
-				matchesExclude := false
-				for _, pattern := range tt.excludePatterns {
-					if matched, _ := doublestar.Match(pattern, file); matched {
-						matchesExclude = true
-						excluded = append(excluded, file)
-						break
-					}
-				}
-
-				if !matchesExclude {
-					included = append(included, file)
-				}
-			}
-
-			// Verify expectations
-			if len(included) != len(tt.expectedIncluded) {
-				t.Errorf("Expected %d included files, got %d", len(tt.expectedIncluded), len(included))
-			}
-
-			for _, expected := range tt.expectedIncluded {
-				found := false
-				for _, actual := range included {
-					if actual == expected {
-						found = true
-						break
-					}
-				}
-				if !found {
-					t.Errorf("Expected %s to be included", expected)
-				}
-			}
-
-			for _, expected := range tt.expectedExcluded {
-				found := false
-				for _, actual := range excluded {
-					if actual == expected {
-						found = true
-						break
-					}
-				}
-				if !found {
-					t.Errorf("Expected %s to be excluded", expected)
-				}
-			}
+			included, excluded := categorizeFiles(tt.mockFiles, tt.includePatterns, tt.excludePatterns)
+			verifyIncludedFiles2(t, included, tt.expectedIncluded)
+			verifyExcludedFiles2(t, excluded, tt.expectedExcluded)
 		})
 	}
 }

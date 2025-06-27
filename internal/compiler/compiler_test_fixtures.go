@@ -178,6 +178,6 @@ func copyEmbeddedFS(fsys embed.FS, srcDir, destDir string) error {
 			return err
 		}
 
-		return os.WriteFile(destPath, data, 0644)
+		return os.WriteFile(destPath, data, 0600)
 	})
 }

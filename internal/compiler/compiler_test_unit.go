@@ -6,6 +6,69 @@ import (
 	"github.com/bmatcuk/doublestar/v4"
 )
 
+// matchesAnyPattern checks if a file path matches any of the given patterns
+func matchesAnyPattern(filePath string, patterns []string) bool {
+	for _, pattern := range patterns {
+		if matched, _ := doublestar.Match(pattern, filePath); matched {
+			return true
+		}
+	}
+	return false
+}
+
+// categorizeFiles separates files into included and excluded based on patterns
+func categorizeFiles(filePaths, includePatterns, excludePatterns []string) (included, excluded []string) {
+	for _, filePath := range filePaths {
+		if !matchesAnyPattern(filePath, includePatterns) {
+			continue // File doesn't match include patterns
+		}
+
+		if matchesAnyPattern(filePath, excludePatterns) {
+			excluded = append(excluded, filePath)
+		} else {
+			included = append(included, filePath)
+		}
+	}
+	return included, excluded
+}
+
+// verifyIncludedFiles checks that all expected files are in the included list
+func verifyIncludedFiles(t *testing.T, included, expectedIncluded []string) {
+	if len(included) != len(expectedIncluded) {
+		t.Errorf("Expected %d included files, got %d. Expected: %v, Got: %v",
+			len(expectedIncluded), len(included), expectedIncluded, included)
+	}
+
+	for _, expectedFile := range expectedIncluded {
+		found := false
+		for _, actualFile := range included {
+			if actualFile == expectedFile {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected file %s to be included, but it wasn't", expectedFile)
+		}
+	}
+}
+
+// verifyExcludedFiles checks that all expected files are in the excluded list
+func verifyExcludedFiles(t *testing.T, excluded, expectedExcluded []string) {
+	for _, expectedFile := range expectedExcluded {
+		found := false
+		for _, actualFile := range excluded {
+			if actualFile == expectedFile {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected file %s to be excluded, but it wasn't", expectedFile)
+		}
+	}
+}
+
 // TestGlobLogicOnly tests the glob matching logic without any filesystem operations
 func TestGlobLogicOnly(t *testing.T) {
 	tests := []struct {
@@ -73,68 +136,9 @@ func TestGlobLogicOnly(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var included, excluded []string
-
-			for _, filePath := range tt.filePaths {
-				// Check if file matches any include pattern
-				matchesInclude := false
-				for _, pattern := range tt.includePatterns {
-					if matched, _ := doublestar.Match(pattern, filePath); matched {
-						matchesInclude = true
-						break
-					}
-				}
-
-				if !matchesInclude {
-					continue // File doesn't match include patterns
-				}
-
-				// Check if file matches any exclude pattern
-				matchesExclude := false
-				for _, pattern := range tt.excludePatterns {
-					if matched, _ := doublestar.Match(pattern, filePath); matched {
-						matchesExclude = true
-						excluded = append(excluded, filePath)
-						break
-					}
-				}
-
-				if !matchesExclude {
-					included = append(included, filePath)
-				}
-			}
-
-			// Verify results
-			if len(included) != len(tt.expectedIncluded) {
-				t.Errorf("Expected %d included files, got %d. Expected: %v, Got: %v",
-					len(tt.expectedIncluded), len(included), tt.expectedIncluded, included)
-			}
-
-			for _, expectedFile := range tt.expectedIncluded {
-				found := false
-				for _, actualFile := range included {
-					if actualFile == expectedFile {
-						found = true
-						break
-					}
-				}
-				if !found {
-					t.Errorf("Expected file %s to be included, but it wasn't", expectedFile)
-				}
-			}
-
-			for _, expectedFile := range tt.expectedExcluded {
-				found := false
-				for _, actualFile := range excluded {
-					if actualFile == expectedFile {
-						found = true
-						break
-					}
-				}
-				if !found {
-					t.Errorf("Expected file %s to be excluded, but it wasn't", expectedFile)
-				}
-			}
+			included, excluded := categorizeFiles(tt.filePaths, tt.includePatterns, tt.excludePatterns)
+			verifyIncludedFiles(t, included, tt.expectedIncluded)
+			verifyExcludedFiles(t, excluded, tt.expectedExcluded)
 		})
 	}
 }
@@ -155,7 +159,7 @@ func BenchmarkGlobMatching(b *testing.B) {
 	for _, bm := range benchmarks {
 		b.Run(bm.name, func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				doublestar.Match(bm.pattern, testPath)
+				_, _ = doublestar.Match(bm.pattern, testPath)
 			}
 		})
 	}
