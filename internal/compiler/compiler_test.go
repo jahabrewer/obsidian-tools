@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/bmatcuk/doublestar/v4"
 )
 
 func TestNew(t *testing.T) {
@@ -706,4 +708,200 @@ func TestTemplateData(t *testing.T) {
 			t.Errorf("Expected empty string for missing env var, got %s", result)
 		}
 	})
+}
+
+// TestRecursiveGlobbingUnit tests the core logic without filesystem operations
+func TestRecursiveGlobbingUnit(t *testing.T) {
+	tests := []struct {
+		name             string
+		includePatterns  []string
+		excludePatterns  []string
+		mockFiles        []string
+		expectedIncluded []string
+		expectedExcluded []string
+	}{
+		{
+			name:            "recursive pattern matches all levels",
+			includePatterns: []string{"**/vault/**/*.md"},
+			excludePatterns: []string{},
+			mockFiles: []string{
+				"vault/root.md",
+				"vault/level1/file1.md",
+				"vault/level1/level2/deep1.md",
+				"vault/level1/level2/level3/deepest.md",
+				"vault/other.txt", // Should be excluded by pattern
+			},
+			expectedIncluded: []string{
+				"vault/root.md",
+				"vault/level1/file1.md",
+				"vault/level1/level2/deep1.md",
+				"vault/level1/level2/level3/deepest.md",
+			},
+			expectedExcluded: []string{},
+		},
+		{
+			name:            "exclusion patterns work at all levels",
+			includePatterns: []string{"**/vault/**/*.md"},
+			excludePatterns: []string{"**/vault/_resources/**", "**/vault/exclude_dir/**"},
+			mockFiles: []string{
+				"vault/root.md",
+				"vault/level1/file1.md",
+				"vault/_resources/template.md",
+				"vault/_resources/nested/template2.md",
+				"vault/exclude_dir/excluded.md",
+			},
+			expectedIncluded: []string{
+				"vault/root.md",
+				"vault/level1/file1.md",
+			},
+			expectedExcluded: []string{
+				"vault/_resources/template.md",
+				"vault/_resources/nested/template2.md",
+				"vault/exclude_dir/excluded.md",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Simulate the pattern matching logic
+			var included, excluded []string
+
+			for _, file := range tt.mockFiles {
+				// Check include patterns
+				matchesInclude := false
+				for _, pattern := range tt.includePatterns {
+					if matched, _ := doublestar.Match(pattern, file); matched {
+						matchesInclude = true
+						break
+					}
+				}
+
+				if !matchesInclude {
+					continue
+				}
+
+				// Check exclude patterns
+				matchesExclude := false
+				for _, pattern := range tt.excludePatterns {
+					if matched, _ := doublestar.Match(pattern, file); matched {
+						matchesExclude = true
+						excluded = append(excluded, file)
+						break
+					}
+				}
+
+				if !matchesExclude {
+					included = append(included, file)
+				}
+			}
+
+			// Verify expectations
+			if len(included) != len(tt.expectedIncluded) {
+				t.Errorf("Expected %d included files, got %d", len(tt.expectedIncluded), len(included))
+			}
+
+			for _, expected := range tt.expectedIncluded {
+				found := false
+				for _, actual := range included {
+					if actual == expected {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("Expected %s to be included", expected)
+				}
+			}
+
+			for _, expected := range tt.expectedExcluded {
+				found := false
+				for _, actual := range excluded {
+					if actual == expected {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("Expected %s to be excluded", expected)
+				}
+			}
+		})
+	}
+}
+
+// TestRecursiveGlobbingIntegration tests with real filesystem (minimal)
+func TestRecursiveGlobbingIntegration(t *testing.T) {
+	// Use t.TempDir() for automatic cleanup
+	tempDir := t.TempDir()
+
+	// Create minimal test structure
+	testFiles := map[string]string{
+		"root.md":                 "# Root",
+		"level1/file1.md":         "# Level 1",
+		"level1/level2/deep.md":   "# Deep",
+		"exclude_dir/excluded.md": "# Excluded",
+		"_resources/template.md":  "# Template",
+		"other.txt":               "Not markdown",
+	}
+
+	for path, content := range testFiles {
+		fullPath := filepath.Join(tempDir, path)
+		dir := filepath.Dir(fullPath)
+
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := os.WriteFile(fullPath, []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Test the actual processFiles function
+	var buf bytes.Buffer
+	c := &Compiler{
+		config:     &Config{Verbose: false},
+		fileConfig: &FileConfig{},
+	}
+
+	patterns := []string{
+		filepath.Join(tempDir, "**/*.md"),
+		"!" + filepath.Join(tempDir, "exclude_dir/**"),
+		"!" + filepath.Join(tempDir, "**/_resources/**"),
+	}
+
+	processedCount, excludedCount, err := c.processFiles(&buf, patterns)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	// Verify counts
+	expectedProcessed := 3 // root.md, level1/file1.md, level1/level2/deep.md
+	expectedExcluded := 2  // excluded.md, template.md
+
+	if processedCount != expectedProcessed {
+		t.Errorf("Expected %d processed files, got %d", expectedProcessed, processedCount)
+	}
+
+	if excludedCount != expectedExcluded {
+		t.Errorf("Expected %d excluded files, got %d", expectedExcluded, excludedCount)
+	}
+
+	// Verify content
+	output := buf.String()
+	shouldContain := []string{"root.md", "file1.md", "deep.md"}
+	shouldNotContain := []string{"excluded.md", "template.md", "other.txt"}
+
+	for _, expected := range shouldContain {
+		if !strings.Contains(output, expected) {
+			t.Errorf("Expected output to contain %s", expected)
+		}
+	}
+
+	for _, unexpected := range shouldNotContain {
+		if strings.Contains(output, unexpected) {
+			t.Errorf("Expected output to NOT contain %s", unexpected)
+		}
+	}
 }
