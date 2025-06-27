@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 func TestVersionCommand(t *testing.T) {
@@ -92,6 +93,21 @@ func TestRunCompilerWithArgs(t *testing.T) {
 		Args: cobra.MinimumNArgs(0),
 	}
 
+	// Reset viper before test to avoid interference
+	viper.Reset()
+
+	// Add flags and bind them to viper (like main does)
+	testCmd.Flags().BoolP("verbose", "v", false, "list all files included in the compilation")
+	testCmd.Flags().BoolP("clipboard", "c", false, "copy the resulting file to clipboard")
+	testCmd.Flags().BoolP("list-excluded", "e", false, "list files excluded from compilation")
+	testCmd.Flags().StringP("config", "f", "", "specify an alternative config file")
+
+	// Bind flags to viper (critical for runCompiler to work)
+	_ = viper.BindPFlag("verbose", testCmd.Flags().Lookup("verbose"))
+	_ = viper.BindPFlag("clipboard", testCmd.Flags().Lookup("clipboard"))
+	_ = viper.BindPFlag("list-excluded", testCmd.Flags().Lookup("list-excluded"))
+	_ = viper.BindPFlag("config", testCmd.Flags().Lookup("config"))
+
 	// Test successful run with args
 	testCmd.SetArgs([]string{outputFile, filepath.Join(tempDir, "*.md")})
 	err = testCmd.Execute()
@@ -103,6 +119,9 @@ func TestRunCompilerWithArgs(t *testing.T) {
 	if _, err := os.Stat(outputFile); os.IsNotExist(err) {
 		t.Error("Expected output file to be created")
 	}
+
+	// Reset viper after test to avoid interference with other tests
+	viper.Reset()
 }
 
 func TestRunCompilerWithConfig(t *testing.T) {
@@ -138,14 +157,40 @@ glob_patterns:
 		Args: cobra.MinimumNArgs(0),
 	}
 
-	// Add config flag
+	// Reset viper before test to avoid interference
+	viper.Reset()
+
+	// Temporarily set HOME to our temp dir to avoid loading real config
+	originalHome := os.Getenv("HOME")
+	os.Setenv("HOME", tempDir)
+	defer os.Setenv("HOME", originalHome)
+
+	// Add flags and bind them to viper (like main does)
+	testCmd.Flags().BoolP("verbose", "v", false, "list all files included in the compilation")
+	testCmd.Flags().BoolP("clipboard", "c", false, "copy the resulting file to clipboard")
+	testCmd.Flags().BoolP("list-excluded", "e", false, "list files excluded from compilation")
 	testCmd.Flags().StringP("config", "f", "", "specify an alternative config file")
+
+	// Bind flags to viper (critical for runCompiler to work)
+	_ = viper.BindPFlag("verbose", testCmd.Flags().Lookup("verbose"))
+	_ = viper.BindPFlag("clipboard", testCmd.Flags().Lookup("clipboard"))
+	_ = viper.BindPFlag("list-excluded", testCmd.Flags().Lookup("list-excluded"))
+	_ = viper.BindPFlag("config", testCmd.Flags().Lookup("config"))
 
 	testCmd.SetArgs([]string{"--config", configFile})
 	err = testCmd.Execute()
 	if err != nil {
 		t.Errorf("Expected successful run with config, got error: %v", err)
 	}
+
+	// Verify output file was created
+	expectedOutput := filepath.Join(tempDir, "output.md")
+	if _, err := os.Stat(expectedOutput); os.IsNotExist(err) {
+		t.Error("Expected output file to be created")
+	}
+
+	// Reset viper after test to avoid interference with other tests
+	viper.Reset()
 }
 
 func TestRunCompilerEdgeCases(t *testing.T) {
@@ -165,6 +210,21 @@ func TestRunCompilerEdgeCases(t *testing.T) {
 		Args: cobra.MinimumNArgs(0),
 	}
 
+	// Reset viper before test to avoid interference
+	viper.Reset()
+
+	// Add flags and bind them to viper (like main does)
+	testCmd.Flags().BoolP("verbose", "v", false, "list all files included in the compilation")
+	testCmd.Flags().BoolP("clipboard", "c", false, "copy the resulting file to clipboard")
+	testCmd.Flags().BoolP("list-excluded", "e", false, "list files excluded from compilation")
+	testCmd.Flags().StringP("config", "f", "", "specify an alternative config file")
+
+	// Bind flags to viper (critical for runCompiler to work)
+	_ = viper.BindPFlag("verbose", testCmd.Flags().Lookup("verbose"))
+	_ = viper.BindPFlag("clipboard", testCmd.Flags().Lookup("clipboard"))
+	_ = viper.BindPFlag("list-excluded", testCmd.Flags().Lookup("list-excluded"))
+	_ = viper.BindPFlag("config", testCmd.Flags().Lookup("config"))
+
 	testCmd.SetArgs([]string{invalidOutputFile, "*.md"})
 	err = testCmd.Execute()
 	if err == nil {
@@ -178,6 +238,9 @@ func TestRunCompilerEdgeCases(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error with invalid glob pattern")
 	}
+
+	// Reset viper after test to avoid interference with other tests
+	viper.Reset()
 }
 
 func TestMainFunction(t *testing.T) {
