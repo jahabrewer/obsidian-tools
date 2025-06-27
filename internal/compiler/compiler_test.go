@@ -769,7 +769,11 @@ func TestProcessFileErrors(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer os.Chmod(restrictedFile, 0644) // Restore permissions for cleanup
+		defer func() {
+			if err := os.Chmod(restrictedFile, 0644); err != nil {
+				t.Logf("Failed to restore permissions: %v", err)
+			}
+		}() // Restore permissions for cleanup
 
 		var buf bytes.Buffer
 		c := &Compiler{
@@ -1150,7 +1154,11 @@ func TestRunErrorHandling(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer os.Chmod(invalidDir, 0755) // Restore permissions for cleanup
+		defer func() {
+			if err := os.Chmod(invalidDir, 0755); err != nil {
+				t.Logf("Failed to restore permissions: %v", err)
+			}
+		}() // Restore permissions for cleanup
 
 		outputFile := filepath.Join(invalidDir, "output.md")
 		c := &Compiler{
