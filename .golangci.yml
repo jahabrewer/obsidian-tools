@@ -28,7 +28,6 @@ linters:
     - unconvert
     - unparam
     - gosec
-    - shadow
   disable:
   settings:
     errcheck:
