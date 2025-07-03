@@ -22,7 +22,9 @@ func main() {
 		Long: `note-compiler compiles markdown notes from multiple files into a single output file.
 Supports glob patterns, exclusions, YAML config, clipboard copy, and verbose output.`,
 		Example: `  note-compiler -v ~/compiled_notes/notes_$(date +%Y-%m-%d_%H%M%S).txt "**/*.md" "!.obsidian/**"
-  note-compiler -c output.md "*.md"`,
+  note-compiler -c output.md "*.md"
+  note-compiler --profile one-on-one-prep
+  note-compiler --list-profiles`,
 		Args: cobra.MinimumNArgs(0), // Allow 0 args for config-only mode
 		RunE: runCompiler,
 	}
@@ -32,6 +34,8 @@ Supports glob patterns, exclusions, YAML config, clipboard copy, and verbose out
 	rootCmd.Flags().BoolP("clipboard", "c", false, "copy the resulting file to clipboard")
 	rootCmd.Flags().BoolP("list-excluded", "e", false, "list files excluded from compilation")
 	rootCmd.Flags().StringP("config", "f", "", "specify an alternative config file (default: ~/.note-compiler.yaml)")
+	rootCmd.Flags().StringP("profile", "p", "", "use a specific profile for compilation")
+	rootCmd.Flags().Bool("list-profiles", false, "list all available profiles and exit")
 
 	// Version command
 	var versionCmd = &cobra.Command{
@@ -48,6 +52,8 @@ Supports glob patterns, exclusions, YAML config, clipboard copy, and verbose out
 	_ = viper.BindPFlag("clipboard", rootCmd.Flags().Lookup("clipboard"))
 	_ = viper.BindPFlag("list-excluded", rootCmd.Flags().Lookup("list-excluded"))
 	_ = viper.BindPFlag("config", rootCmd.Flags().Lookup("config"))
+	_ = viper.BindPFlag("profile", rootCmd.Flags().Lookup("profile"))
+	_ = viper.BindPFlag("list-profiles", rootCmd.Flags().Lookup("list-profiles"))
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
@@ -60,6 +66,17 @@ func runCompiler(cmd *cobra.Command, args []string) error {
 		Clipboard:    viper.GetBool("clipboard"),
 		ListExcluded: viper.GetBool("list-excluded"),
 		ConfigFile:   viper.GetString("config"),
+		Profile:      viper.GetString("profile"),
+	}
+
+	// Handle list-profiles command
+	if viper.GetBool("list-profiles") {
+		comp := compiler.New(config)
+		if err := comp.LoadConfigOnly(); err != nil {
+			return fmt.Errorf("failed to load config: %w", err)
+		}
+		comp.ListAvailableProfiles()
+		return nil
 	}
 
 	// Parse arguments
