@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/bmatcuk/doublestar/v4"
+	"gopkg.in/yaml.v3"
 )
 
 func TestNew(t *testing.T) {
@@ -1351,6 +1352,849 @@ func TestBenchmarkIndirectly(t *testing.T) {
 			if err != nil {
 				t.Errorf("Pattern matching failed for %s: %v", pattern, err)
 			}
+		}
+	})
+}
+
+// Test profile-related functionality
+func TestProfileFunctionality(t *testing.T) {
+	// Create a temporary directory
+	tempDir, err := os.MkdirTemp("", "profile_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	t.Run("load profiles from external markdown file", func(t *testing.T) {
+		// Create a profiles markdown file
+		profilesFile := filepath.Join(tempDir, "profiles.md")
+		profilesContent := `# Profile Configuration
+
+This is my profiles configuration for note-compiler.
+
+` + "```yaml" + `
+base:
+  prompt: "System Ready"
+  globs:
+    - "*.md"
+    - "!excluded.md"
+
+profiles:
+  test-profile:
+    description: "Test profile"
+    prompt: "Test prompt"
+    globs:
+      - "test*.md"
+  kb-only:
+    description: "Knowledge base only"
+    globs:
+      - "kb/*.md"
+` + "```" + `
+
+The configuration above defines my compilation profiles.
+`
+
+		err := os.WriteFile(profilesFile, []byte(profilesContent), 0644)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		c := &Compiler{
+			config: &Config{
+				Verbose: true,
+			},
+			fileConfig: &FileConfig{
+				ProfilesPath: profilesFile,
+			},
+		}
+
+		err = c.loadProfiles()
+		if err != nil {
+			t.Errorf("Unexpected error loading profiles: %v", err)
+		}
+
+		// Verify profiles were loaded
+		if c.fileConfig.Profiles == nil || len(c.fileConfig.Profiles) != 2 {
+			t.Errorf("Expected 2 profiles, got %d", len(c.fileConfig.Profiles))
+		}
+
+		// Check specific profile
+		testProfile, exists := c.fileConfig.Profiles["test-profile"]
+		if !exists {
+			t.Error("Expected 'test-profile' to exist")
+		}
+		if testProfile.Description != "Test profile" {
+			t.Errorf("Expected description 'Test profile', got '%s'", testProfile.Description)
+		}
+
+		// Check base profile
+		if c.fileConfig.BaseProfile == nil {
+			t.Error("Expected base profile to be loaded")
+		}
+		if c.fileConfig.BaseProfile.Prompt != "System Ready" {
+			t.Errorf("Expected base prompt 'System Ready', got '%s'", c.fileConfig.BaseProfile.Prompt)
+		}
+	})
+
+	t.Run("load profiles from markdown file with no YAML blocks", func(t *testing.T) {
+		// Create a markdown file without YAML blocks
+		profilesFile := filepath.Join(tempDir, "no-yaml.md")
+		profilesContent := `# Profile Configuration
+
+This is just text with no YAML blocks.
+
+Some more text here.
+`
+
+		err := os.WriteFile(profilesFile, []byte(profilesContent), 0644)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		c := &Compiler{
+			config: &Config{
+				Verbose: true,
+			},
+			fileConfig: &FileConfig{
+				ProfilesPath: profilesFile,
+			},
+		}
+
+		err = c.loadProfiles()
+		if err == nil {
+			t.Error("Expected error for markdown file with no YAML blocks")
+		}
+		if !strings.Contains(err.Error(), "no YAML code blocks found") {
+			t.Errorf("Expected specific error message, got: %v", err)
+		}
+	})
+
+	t.Run("load profiles from markdown file with multiple YAML blocks", func(t *testing.T) {
+		// Create a markdown file with multiple YAML blocks
+		profilesFile := filepath.Join(tempDir, "multiple-yaml.md")
+		profilesContent := `# Profile Configuration
+
+First block:
+` + "```yaml" + `
+base:
+  prompt: "System Ready"
+` + "```" + `
+
+Second block:
+` + "```yaml" + `
+profiles:
+  test:
+    description: "Test"
+` + "```" + `
+`
+
+		err := os.WriteFile(profilesFile, []byte(profilesContent), 0644)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		c := &Compiler{
+			config: &Config{
+				Verbose: true,
+			},
+			fileConfig: &FileConfig{
+				ProfilesPath: profilesFile,
+			},
+		}
+
+		err = c.loadProfiles()
+		if err == nil {
+			t.Error("Expected error for markdown file with multiple YAML blocks")
+		}
+		if !strings.Contains(err.Error(), "multiple YAML code blocks found") {
+			t.Errorf("Expected specific error message, got: %v", err)
+		}
+	})
+
+	t.Run("load profiles from markdown file with invalid YAML", func(t *testing.T) {
+		// Create a markdown file with invalid YAML
+		profilesFile := filepath.Join(tempDir, "invalid-yaml.md")
+		profilesContent := `# Profile Configuration
+
+` + "```yaml" + `
+base:
+  prompt: "System Ready"
+invalid yaml content: [unclosed bracket
+` + "```" + `
+`
+
+		err := os.WriteFile(profilesFile, []byte(profilesContent), 0644)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		c := &Compiler{
+			config: &Config{
+				Verbose: true,
+			},
+			fileConfig: &FileConfig{
+				ProfilesPath: profilesFile,
+			},
+		}
+
+		err = c.loadProfiles()
+		if err == nil {
+			t.Error("Expected error for invalid YAML")
+		}
+		if !strings.Contains(err.Error(), "failed to parse profiles YAML") {
+			t.Errorf("Expected YAML parsing error, got: %v", err)
+		}
+	})
+
+	t.Run("apply profile successfully", func(t *testing.T) {
+		c := &Compiler{
+			config: &Config{
+				Profile: "test-profile",
+				Verbose: true,
+			},
+			fileConfig: &FileConfig{
+				BaseProfile: &Profile{
+					Prompt:       "Base prompt",
+					GlobPatterns: []string{"base*.md"},
+				},
+				Profiles: map[string]*Profile{
+					"test-profile": {
+						Description:  "Test profile",
+						Prompt:       "Test prompt",
+						GlobPatterns: []string{"test*.md"},
+					},
+				},
+			},
+		}
+
+		err := c.applyProfile("test-profile")
+		if err != nil {
+			t.Errorf("Unexpected error applying profile: %v", err)
+		}
+
+		// Verify profile was applied
+		if len(c.config.GlobPatterns) != 2 {
+			t.Errorf("Expected 2 glob patterns (base + profile), got %d", len(c.config.GlobPatterns))
+		}
+		if c.config.GlobPatterns[0] != "base*.md" {
+			t.Errorf("Expected first pattern to be 'base*.md', got '%s'", c.config.GlobPatterns[0])
+		}
+		if c.config.GlobPatterns[1] != "test*.md" {
+			t.Errorf("Expected second pattern to be 'test*.md', got '%s'", c.config.GlobPatterns[1])
+		}
+	})
+
+	t.Run("apply nonexistent profile", func(t *testing.T) {
+		c := &Compiler{
+			config: &Config{
+				Profile: "nonexistent",
+			},
+			fileConfig: &FileConfig{
+				Profiles: map[string]*Profile{
+					"existing": {
+						Description: "Existing profile",
+					},
+				},
+			},
+		}
+
+		err := c.applyProfile("nonexistent")
+		if err == nil {
+			t.Error("Expected error when applying nonexistent profile")
+		}
+		if !strings.Contains(err.Error(), "profile 'nonexistent' not found") {
+			t.Errorf("Expected specific error message, got: %v", err)
+		}
+	})
+
+	t.Run("apply profile with no profiles defined", func(t *testing.T) {
+		c := &Compiler{
+			config: &Config{
+				Profile: "test",
+			},
+			fileConfig: &FileConfig{},
+		}
+
+		err := c.applyProfile("test")
+		if err == nil {
+			t.Error("Expected error when no profiles defined")
+		}
+	})
+
+	t.Run("get profile prompt", func(t *testing.T) {
+		c := &Compiler{
+			config: &Config{
+				Profile: "test-profile",
+			},
+			fileConfig: &FileConfig{
+				BaseProfile: &Profile{
+					Prompt: "Base prompt",
+				},
+				Profiles: map[string]*Profile{
+					"test-profile": {
+						Prompt: "Profile prompt",
+					},
+				},
+			},
+		}
+
+		prompt := c.getProfilePrompt()
+		expected := "Base prompt\n\nProfile prompt"
+		if prompt != expected {
+			t.Errorf("Expected prompt '%s', got '%s'", expected, prompt)
+		}
+	})
+
+	t.Run("get profile prompt with no profile", func(t *testing.T) {
+		c := &Compiler{
+			config:     &Config{},
+			fileConfig: &FileConfig{},
+		}
+
+		prompt := c.getProfilePrompt()
+		if prompt != "" {
+			t.Errorf("Expected empty prompt, got '%s'", prompt)
+		}
+	})
+
+	t.Run("list available profiles", func(t *testing.T) {
+		c := &Compiler{
+			config: &Config{},
+			fileConfig: &FileConfig{
+				Profiles: map[string]*Profile{
+					"profile1": {
+						Description: "First profile",
+					},
+					"profile2": {
+						Description: "Second profile",
+					},
+				},
+			},
+		}
+
+		// Capture stdout
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		c.ListAvailableProfiles()
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		output, _ := io.ReadAll(r)
+		outputStr := string(output)
+
+		if !strings.Contains(outputStr, "profile1") {
+			t.Error("Expected 'profile1' in output")
+		}
+		if !strings.Contains(outputStr, "First profile") {
+			t.Error("Expected 'First profile' in output")
+		}
+		if !strings.Contains(outputStr, "profile2") {
+			t.Error("Expected 'profile2' in output")
+		}
+	})
+
+	t.Run("list available profiles with none defined", func(t *testing.T) {
+		c := &Compiler{
+			config:     &Config{},
+			fileConfig: &FileConfig{},
+		}
+
+		// Capture stdout
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		c.ListAvailableProfiles()
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		output, _ := io.ReadAll(r)
+		outputStr := string(output)
+
+		if !strings.Contains(outputStr, "No profiles defined") {
+			t.Error("Expected 'No profiles defined' in output")
+		}
+	})
+}
+
+func TestExpandTemplateWithProfile(t *testing.T) {
+	// Create a temporary directory
+	tempDir, err := os.MkdirTemp("", "template_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	t.Run("expand template with profile variables", func(t *testing.T) {
+		c := &Compiler{
+			config: &Config{
+				Profile: "test-profile",
+			},
+			fileConfig: &FileConfig{
+				Profiles: map[string]*Profile{
+					"test-profile": {
+						Variables: map[string]string{
+							"feature_name": "Smart Query",
+							"version":      "2.0",
+						},
+					},
+				},
+			},
+		}
+
+		template := "Working on {{.Vars.feature_name}} version {{.Vars.version}}"
+		result := c.expandTemplateWithProfile(template)
+		expected := "Working on Smart Query version 2.0"
+
+		if result != expected {
+			t.Errorf("Expected '%s', got '%s'", expected, result)
+		}
+	})
+
+	t.Run("expand template with standard variables", func(t *testing.T) {
+		c := &Compiler{
+			config:     &Config{},
+			fileConfig: &FileConfig{},
+		}
+
+		template := "Home directory: {{.Home}}"
+		result := c.expandTemplateWithProfile(template)
+
+		if !strings.Contains(result, "Home directory:") {
+			t.Error("Expected template to contain 'Home directory:'")
+		}
+	})
+
+	t.Run("expand template with invalid syntax", func(t *testing.T) {
+		c := &Compiler{
+			config:     &Config{},
+			fileConfig: &FileConfig{},
+		}
+
+		template := "Invalid template {{.InvalidSyntax"
+		result := c.expandTemplateWithProfile(template)
+
+		// Should return original template on error
+		if result != template {
+			t.Errorf("Expected original template on error, got '%s'", result)
+		}
+	})
+}
+
+func TestLoadConfigOnly(t *testing.T) {
+	// Create a temporary directory
+	tempDir, err := os.MkdirTemp("", "config_only_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	t.Run("load config only successfully", func(t *testing.T) {
+		// Create a config file
+		configFile := filepath.Join(tempDir, "config.yaml")
+		configContent := `output_file_path: "test.md"
+glob_patterns:
+  - "*.md"`
+
+		err := os.WriteFile(configFile, []byte(configContent), 0644)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		c := &Compiler{
+			config: &Config{
+				ConfigFile: configFile,
+			},
+			fileConfig: &FileConfig{},
+		}
+
+		err = c.LoadConfigOnly()
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+
+		// Verify config was loaded
+		if c.fileConfig.OutputFilePath != "test.md" {
+			t.Errorf("Expected output path 'test.md', got '%s'", c.fileConfig.OutputFilePath)
+		}
+	})
+
+	t.Run("load config only with profiles", func(t *testing.T) {
+		// Create a profiles markdown file
+		profilesFile := filepath.Join(tempDir, "profiles.md")
+		profilesContent := `# Profile Configuration
+
+` + "```yaml" + `
+profiles:
+  test:
+    description: "Test profile"
+` + "```" + `
+`
+
+		err := os.WriteFile(profilesFile, []byte(profilesContent), 0644)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Create an empty config file to prevent loading the default config
+		configFile := filepath.Join(tempDir, "empty-config.yaml")
+		configContent := `profiles_path: ` + profilesFile
+		err = os.WriteFile(configFile, []byte(configContent), 0644)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		c := &Compiler{
+			config: &Config{
+				ConfigFile: configFile, // Use empty config file instead of default
+			},
+			fileConfig: &FileConfig{},
+		}
+
+		err = c.LoadConfigOnly()
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+
+		// Verify profiles were loaded
+		if len(c.fileConfig.Profiles) != 1 {
+			t.Errorf("Expected 1 profile, got %d", len(c.fileConfig.Profiles))
+		}
+	})
+}
+
+func TestProcessFilesWithProfile(t *testing.T) {
+	// Create a temporary directory
+	tempDir, err := os.MkdirTemp("", "process_profile_test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create a test file
+	testFile := filepath.Join(tempDir, "test.md")
+	testContent := "# Test Content"
+	err = os.WriteFile(testFile, []byte(testContent), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("process files with profile prompt", func(t *testing.T) {
+		var buf bytes.Buffer
+		c := &Compiler{
+			config: &Config{
+				Profile: "test-profile",
+			},
+			fileConfig: &FileConfig{
+				BaseProfile: &Profile{
+					Prompt: "Base prompt",
+				},
+				Profiles: map[string]*Profile{
+					"test-profile": {
+						Prompt: "Profile prompt",
+					},
+				},
+			},
+		}
+
+		patterns := []string{filepath.Join(tempDir, "*.md")}
+		_, _, err := c.processFiles(&buf, patterns)
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+
+		output := buf.String()
+		if !strings.Contains(output, "Base prompt") {
+			t.Error("Expected base prompt in output")
+		}
+		if !strings.Contains(output, "Profile prompt") {
+			t.Error("Expected profile prompt in output")
+		}
+		if !strings.Contains(output, "Profile 'test-profile'") {
+			t.Error("Expected profile context in output")
+		}
+	})
+
+	t.Run("process files without profile", func(t *testing.T) {
+		var buf bytes.Buffer
+		c := &Compiler{
+			config:     &Config{},
+			fileConfig: &FileConfig{},
+		}
+
+		patterns := []string{filepath.Join(tempDir, "*.md")}
+		_, _, err := c.processFiles(&buf, patterns)
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+
+		output := buf.String()
+		if strings.Contains(output, "Profile '") {
+			t.Error("Should not contain profile context when no profile is used")
+		}
+	})
+}
+
+func TestExtractYAMLFromMarkdown(t *testing.T) {
+	t.Run("valid YAML code block", func(t *testing.T) {
+		content := `# Profile Configuration
+
+This is my profiles configuration for note-compiler.
+
+` + "```yaml" + `
+base:
+  prompt: "System Ready"
+  globs:
+    - "*.md"
+    - "!excluded.md"
+
+profiles:
+  test-profile:
+    description: "Test profile"
+    prompt: "Test prompt"
+    globs:
+      - "test*.md"
+` + "```" + `
+
+The configuration above defines...
+`
+
+		result, err := extractYAMLFromMarkdown(content)
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+
+		if !strings.Contains(result, "base:") {
+			t.Error("Expected 'base:' in extracted YAML")
+		}
+		if !strings.Contains(result, "test-profile:") {
+			t.Error("Expected 'test-profile:' in extracted YAML")
+		}
+	})
+
+	t.Run("valid YAML code block with yml extension", func(t *testing.T) {
+		content := `# Profile Configuration
+
+` + "```yml" + `
+profiles:
+  test:
+    description: "Test"
+` + "```" + `
+`
+
+		result, err := extractYAMLFromMarkdown(content)
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+
+		if !strings.Contains(result, "profiles:") {
+			t.Error("Expected 'profiles:' in extracted YAML")
+		}
+	})
+
+	t.Run("valid YAML code block without language specifier", func(t *testing.T) {
+		content := `# Profile Configuration
+
+` + "```" + `
+profiles:
+  test:
+    description: "Test"
+` + "```" + `
+`
+
+		result, err := extractYAMLFromMarkdown(content)
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+
+		if !strings.Contains(result, "profiles:") {
+			t.Error("Expected 'profiles:' in extracted YAML")
+		}
+	})
+
+	t.Run("no YAML code blocks", func(t *testing.T) {
+		content := `# Profile Configuration
+
+This is just text with no code blocks.
+
+Some more text here.
+`
+
+		_, err := extractYAMLFromMarkdown(content)
+		if err == nil {
+			t.Error("Expected error for no YAML code blocks")
+		}
+		if !strings.Contains(err.Error(), "no YAML code blocks found") {
+			t.Errorf("Expected specific error message, got: %v", err)
+		}
+	})
+
+	t.Run("multiple YAML code blocks", func(t *testing.T) {
+		content := `# Profile Configuration
+
+First block:
+` + "```yaml" + `
+base:
+  prompt: "System Ready"
+` + "```" + `
+
+Second block:
+` + "```yaml" + `
+profiles:
+  test:
+    description: "Test"
+` + "```" + `
+`
+
+		_, err := extractYAMLFromMarkdown(content)
+		if err == nil {
+			t.Error("Expected error for multiple YAML code blocks")
+		}
+		if !strings.Contains(err.Error(), "multiple YAML code blocks found") {
+			t.Errorf("Expected specific error message, got: %v", err)
+		}
+	})
+
+	t.Run("unclosed YAML code block", func(t *testing.T) {
+		content := `# Profile Configuration
+
+` + "```yaml" + `
+profiles:
+  test:
+    description: "Test"
+`
+
+		_, err := extractYAMLFromMarkdown(content)
+		if err == nil {
+			t.Error("Expected error for unclosed YAML code block")
+		}
+		if !strings.Contains(err.Error(), "unclosed YAML code block") {
+			t.Errorf("Expected specific error message, got: %v", err)
+		}
+	})
+
+	t.Run("empty YAML code block", func(t *testing.T) {
+		content := `# Profile Configuration
+
+` + "```yaml" + `
+` + "```" + `
+`
+
+		_, err := extractYAMLFromMarkdown(content)
+		if err == nil {
+			t.Error("Expected error for empty YAML code block")
+		}
+		if !strings.Contains(err.Error(), "YAML code block is empty") {
+			t.Errorf("Expected specific error message, got: %v", err)
+		}
+	})
+
+	t.Run("YAML code block with only whitespace", func(t *testing.T) {
+		content := `# Profile Configuration
+
+` + "```yaml" + `
+   
+   
+` + "```" + `
+`
+
+		_, err := extractYAMLFromMarkdown(content)
+		if err == nil {
+			t.Error("Expected error for whitespace-only YAML code block")
+		}
+		if !strings.Contains(err.Error(), "YAML code block is empty") {
+			t.Errorf("Expected specific error message, got: %v", err)
+		}
+	})
+
+	t.Run("non-YAML code blocks ignored", func(t *testing.T) {
+		content := `# Profile Configuration
+
+` + "```javascript" + `
+console.log("This is JavaScript");
+` + "```" + `
+
+` + "```yaml" + `
+profiles:
+  test:
+    description: "Test"
+` + "```" + `
+
+` + "```bash" + `
+echo "This is bash"
+` + "```" + `
+`
+
+		result, err := extractYAMLFromMarkdown(content)
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+
+		if !strings.Contains(result, "profiles:") {
+			t.Error("Expected 'profiles:' in extracted YAML")
+		}
+		if strings.Contains(result, "console.log") {
+			t.Error("Should not include JavaScript code")
+		}
+		if strings.Contains(result, "echo") {
+			t.Error("Should not include bash code")
+		}
+	})
+
+	t.Run("complex YAML structure", func(t *testing.T) {
+		content := `# Profile Configuration
+
+` + "```yaml" + `
+base:
+  prompt: "System Ready ▮"
+  globs:
+    - "{{.Home}}/vault/People/Gemini Instructions.md"
+    - "!**/_resources/**"
+
+profiles:
+  one-on-one-prep:
+    description: "Prepares context for my 1-on-1 with Vamsi"
+    prompt: "Summarize my recent work, blockers, and talking points."
+    globs:
+      - "{{.Home}}/vault/Meeting notes/Vamsi 1 on 1/*.md"
+      - "{{.Home}}/vault/Todo.md"
+    variables:
+      test_var: "value"
+  
+  feature-dive:
+    description: "Deep dive into a specific feature"
+    prompt: "Analyze the {{.Vars.feature_name}} feature"
+    globs:
+      - "{{.Home}}/vault/Tickets/*{{.Vars.feature_name}}*.md"
+    variables:
+      feature_name: "Smart Query"
+` + "```" + `
+`
+
+		result, err := extractYAMLFromMarkdown(content)
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+
+		// Parse the YAML to ensure it's valid
+		var profilesConfig ProfilesConfig
+		if err := yaml.Unmarshal([]byte(result), &profilesConfig); err != nil {
+			t.Errorf("Failed to parse extracted YAML: %v", err)
+		}
+
+		// Verify structure
+		if profilesConfig.BaseProfile == nil {
+			t.Error("Expected base profile to be parsed")
+		}
+		if len(profilesConfig.Profiles) != 2 {
+			t.Errorf("Expected 2 profiles, got %d", len(profilesConfig.Profiles))
+		}
+		if profilesConfig.Profiles["feature-dive"].Variables["feature_name"] != "Smart Query" {
+			t.Error("Expected feature_name variable to be parsed correctly")
 		}
 	})
 }

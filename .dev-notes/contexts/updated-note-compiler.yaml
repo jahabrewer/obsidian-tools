@@ -1,0 +1,65 @@
+# Updated configuration file for note-compiler with profiles support
+# Copy this to ~/.note-compiler.yaml to use
+
+# Output file path - REQUIRED on command line if not specified here
+output_file_path: "{{.Home}}/compiled_notes/notes_{{.Date \"2006-01-02_150405\"}}.txt"
+
+# Path to external profiles configuration file (optional)
+# This points to a MARKDOWN file within your Obsidian vault for better portability
+# The file should contain exactly one YAML code block with the profiles configuration
+profiles_path: "{{.Home}}/vault/Configs/compiler-profiles.md"
+
+# Default glob patterns (used when no profile is specified)
+glob_patterns:
+  - "{{.Home}}/vault/**/*.md"
+  - "!{{.Home}}/vault/Archive/**/*.md"
+  - "!{{.Home}}/vault/Tickets/xml/**"
+  - "!**/_resources/**"
+
+# Show excluded files in output (optional)
+list_excluded: true
+
+# Alternative: Inline profiles configuration
+# You can define profiles directly in this file instead of using profiles_path
+# base:
+#   prompt: "Use these notes as context to answer questions and provide helpful responses."
+#   globs:
+#     - "{{.Home}}/vault/People/AI Instructions.md"
+#     - "!**/_resources/**"
+
+# profiles:
+#   default:
+#     description: "Standard full-vault context"
+#     globs:
+#       - "{{.Home}}/vault/**/*.md"
+#       - "!{{.Home}}/vault/Archive/**/*.md"
+#   
+#   kb-only:
+#     description: "Knowledge base only"
+#     prompt: "Based on my knowledge base, help me answer technical questions."
+#     globs:
+#       - "{{.Home}}/vault/KB/**/*.md"
+
+# Usage Examples:
+# note-compiler --profile one-on-one-prep
+# note-compiler --profile kb-only -v
+# note-compiler --list-profiles
+# note-compiler --profile feature-dive ~/output.txt (uses profile's globs)
+# note-compiler ~/output.txt "*.md" (ignores any profile, uses command line args)
+
+# Note: The profiles_path now points to a Markdown file that contains a single YAML code block.
+# This allows you to edit the profiles configuration directly in Obsidian with syntax highlighting
+# and documentation around the configuration.
+#
+# Example Markdown file structure:
+# # Profile Configuration
+# 
+# This is my profiles configuration.
+# 
+# ```yaml
+# base:
+#   prompt: "Use these notes as context to answer questions and provide helpful responses."
+# profiles:
+#   my-profile:
+#     description: "My profile"
+# ``` 

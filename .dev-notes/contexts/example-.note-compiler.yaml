@@ -1,0 +1,67 @@
+# Sample configuration file for note-compiler
+# Copy this to ~/.note-compiler.yaml to use
+
+# Output file path - REQUIRED on command line if not specified here
+# Uses Go template syntax:
+# {{.Home}} - Home directory
+# {{.Date "format"}} - Current date/time with Go time format
+# {{.Env "VAR"}} - Environment variable
+output_file_path: "{{.Home}}/compiled_notes/notes_{{.Date \"2006-01-02_150405\"}}.txt"
+
+# Glob patterns - REQUIRED on command line if not specified here
+# These define which files will be included in the compilation
+# Patterns starting with ! are exclusion patterns
+glob_patterns:
+  - "{{.Home}}/vault/**/*.md"
+  # - "!{{.Home}}/vault/Archive/**/*.md"
+  - "!{{.Home}}/vault/Archive/Contexts/**"
+  - "!{{.Home}}/vault/Tickets/xml/**"
+  # - "!{{.Home}}/vault/KB/*.md"
+  - "!**/_resources/**"
+
+# Less daily notes
+# glob_patterns:
+#   - "{{.Home}}/vault/**/*.md"
+#   - "!{{.Home}}/vault/Status/2025-03-*"
+#   - "!{{.Home}}/vault/Status/2025-04-*"
+#   # - "!{{.Home}}/vault/Status/2025-05-*"
+#   - "!{{.Home}}/vault/Archive/Contexts/**"
+#   # - "!{{.Home}}/vault/Tickets/xml/**"
+#   - "!**/_resources/**"
+
+# Performance Development Feedback (PDF)
+# glob_patterns:
+#   - "{{.Home}}/vault/**/*.md"
+#   - "!{{.Home}}/vault/Status/2025-03-*"
+#   - "!{{.Home}}/vault/Tickets/xml/**"
+#   - "!**/_resources/**"
+
+# KB only
+# glob_patterns:
+#   - "{{.Home}}/vault/KB/**/*.md"
+#   - "!**/_resources/**"
+
+# With xml, fewer daily notes
+# glob_patterns:
+#   - "{{.Home}}/vault/**/*.md"
+#   - "!{{.Home}}/vault/Status/2025-03-*"
+#   - "!{{.Home}}/vault/Status/2025-04-*"
+#   - "!{{.Home}}/vault/Status/2025-05-*"
+#   - "!{{.Home}}/vault/Archive/Contexts/**"
+#   - "!**/_resources/**"
+
+
+
+# Show excluded files in output (optional)
+# list_excluded: true
+
+# Examples of Go date formats:
+# {{.Date "2006-01-02"}}           -> 2024-03-15
+# {{.Date "2006-01-02_150405"}}    -> 2024-03-15_143022
+# {{.Date "Jan 02, 2006"}}         -> Mar 15, 2024
+# {{.Date "Monday, Jan 2 2006"}}   -> Friday, Mar 15 2024
+
+# Examples of paths:
+# {{.Home}}/notes/daily_{{.Date "2006-01-02"}}.md
+# {{.Env "WORKSPACE"}}/compiled/notes.txt
+# /tmp/notes_{{.Date "20060102_150405"}}.txt

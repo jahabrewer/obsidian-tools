@@ -22,12 +22,16 @@ type Config struct {
 	ConfigFile   string
 	OutputFile   string
 	GlobPatterns []string
+	Profile      string
 }
 
 type FileConfig struct {
-	OutputFilePath string   `yaml:"output_file_path"`
-	GlobPatterns   []string `yaml:"glob_patterns"`
-	ListExcluded   bool     `yaml:"list_excluded"`
+	OutputFilePath string              `yaml:"output_file_path"`
+	GlobPatterns   []string            `yaml:"glob_patterns"`
+	ListExcluded   bool                `yaml:"list_excluded"`
+	ProfilesPath   string              `yaml:"profiles_path"`
+	BaseProfile    *Profile            `yaml:"base"`
+	Profiles       map[string]*Profile `yaml:"profiles"`
 }
 
 type Compiler struct {
@@ -50,6 +54,20 @@ func (td TemplateData) Env(key string) string {
 	return os.Getenv(key)
 }
 
+// Profile represents a configuration profile with specific settings
+type Profile struct {
+	Description  string            `yaml:"description"`
+	Prompt       string            `yaml:"prompt"`
+	GlobPatterns []string          `yaml:"globs"`
+	Variables    map[string]string `yaml:"variables"`
+}
+
+// ProfilesConfig represents the structure of a standalone profiles configuration file
+type ProfilesConfig struct {
+	BaseProfile *Profile            `yaml:"base"`
+	Profiles    map[string]*Profile `yaml:"profiles"`
+}
+
 func New(config *Config) *Compiler {
 	return &Compiler{
 		config:     config,
@@ -58,44 +76,24 @@ func New(config *Config) *Compiler {
 }
 
 func (c *Compiler) Run() error {
-	// Load configuration
-	if err := c.loadConfig(); err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+	// Initialize configuration and profiles
+	if err := c.initializeConfig(); err != nil {
+		return err
 	}
 
-	// Apply file config values if not set via command line
-	if !c.config.ListExcluded && c.fileConfig.ListExcluded {
-		c.config.ListExcluded = c.fileConfig.ListExcluded
-	}
-
-	// Determine output file
-	outputFile, err := c.determineOutputFile()
+	// Determine output file and glob patterns
+	outputFile, globPatterns, err := c.prepareFileSettings()
 	if err != nil {
 		return err
 	}
 
-	// Determine glob patterns
-	globPatterns, err := c.determineGlobPatterns()
+	// Print verbose info if requested
+	c.printVerboseInfo(outputFile, globPatterns)
+
+	// Setup output file
+	outFile, err := c.setupOutputFile(outputFile)
 	if err != nil {
 		return err
-	}
-
-	if c.config.Verbose {
-		fmt.Printf("note-compiler (version info would be here)\n")
-		fmt.Printf("Output file: %s\n", outputFile)
-		fmt.Printf("Glob patterns: %v\n", globPatterns)
-		fmt.Println()
-	}
-
-	// Create output directory
-	if mkdirErr := os.MkdirAll(filepath.Dir(outputFile), 0755); mkdirErr != nil {
-		return fmt.Errorf("failed to create output directory: %w", mkdirErr)
-	}
-
-	// Create/clear output file
-	outFile, err := os.Create(outputFile)
-	if err != nil {
-		return fmt.Errorf("failed to create output file: %w", err)
 	}
 	defer outFile.Close()
 
@@ -105,6 +103,83 @@ func (c *Compiler) Run() error {
 		return err
 	}
 
+	// Report results
+	c.reportResults(processedCount, excludedCount, outputFile, outFile)
+	return nil
+}
+
+// initializeConfig loads configuration and applies profiles
+func (c *Compiler) initializeConfig() error {
+	// Load configuration
+	if err := c.loadConfig(); err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Load profiles if available
+	if err := c.loadProfiles(); err != nil {
+		return fmt.Errorf("failed to load profiles: %w", err)
+	}
+
+	// Apply profile if specified
+	if c.config.Profile != "" {
+		if err := c.applyProfile(c.config.Profile); err != nil {
+			return fmt.Errorf("failed to apply profile '%s': %w", c.config.Profile, err)
+		}
+	}
+
+	// Apply file config values if not set via command line
+	if !c.config.ListExcluded && c.fileConfig.ListExcluded {
+		c.config.ListExcluded = c.fileConfig.ListExcluded
+	}
+
+	return nil
+}
+
+// prepareFileSettings determines output file and glob patterns
+func (c *Compiler) prepareFileSettings() (string, []string, error) {
+	// Determine output file
+	outputFile, err := c.determineOutputFile()
+	if err != nil {
+		return "", nil, err
+	}
+
+	// Determine glob patterns
+	globPatterns, err := c.determineGlobPatterns()
+	if err != nil {
+		return "", nil, err
+	}
+
+	return outputFile, globPatterns, nil
+}
+
+// printVerboseInfo prints verbose information if requested
+func (c *Compiler) printVerboseInfo(outputFile string, globPatterns []string) {
+	if c.config.Verbose {
+		fmt.Printf("note-compiler (version info would be here)\n")
+		fmt.Printf("Output file: %s\n", outputFile)
+		fmt.Printf("Glob patterns: %v\n", globPatterns)
+		fmt.Println()
+	}
+}
+
+// setupOutputFile creates output directory and file
+func (c *Compiler) setupOutputFile(outputFile string) (*os.File, error) {
+	// Create output directory
+	if mkdirErr := os.MkdirAll(filepath.Dir(outputFile), 0755); mkdirErr != nil {
+		return nil, fmt.Errorf("failed to create output directory: %w", mkdirErr)
+	}
+
+	// Create/clear output file
+	outFile, err := os.Create(outputFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create output file: %w", err)
+	}
+
+	return outFile, nil
+}
+
+// reportResults reports processing results and handles clipboard
+func (c *Compiler) reportResults(processedCount, excludedCount int, outputFile string, outFile *os.File) {
 	fmt.Printf("Successfully processed %d files into %s\n", processedCount, outputFile)
 	fmt.Printf("Number of files excluded: %d\n", excludedCount)
 
@@ -121,8 +196,6 @@ func (c *Compiler) Run() error {
 			fmt.Println("Content copied to clipboard")
 		}
 	}
-
-	return nil
 }
 
 func (c *Compiler) loadConfig() error {
@@ -157,6 +230,184 @@ func (c *Compiler) loadConfig() error {
 	}
 
 	return nil
+}
+
+func (c *Compiler) loadProfiles() error {
+	// Load profiles from separate file if specified
+	if c.fileConfig.ProfilesPath != "" {
+		profilesPath := expandPath(c.fileConfig.ProfilesPath)
+		if _, err := os.Stat(profilesPath); err != nil {
+			if os.IsNotExist(err) {
+				if c.config.Verbose {
+					fmt.Printf("Profiles file not found: %s\n", profilesPath)
+				}
+				return nil
+			}
+			return fmt.Errorf("failed to access profiles file: %w", err)
+		}
+
+		data, err := os.ReadFile(profilesPath)
+		if err != nil {
+			return fmt.Errorf("failed to read profiles file: %w", err)
+		}
+
+		// Extract YAML from markdown file
+		yamlContent, err := extractYAMLFromMarkdown(string(data))
+		if err != nil {
+			return fmt.Errorf("failed to extract YAML from profiles file: %w", err)
+		}
+
+		var profilesConfig ProfilesConfig
+		if err := yaml.Unmarshal([]byte(yamlContent), &profilesConfig); err != nil {
+			return fmt.Errorf("failed to parse profiles YAML: %w", err)
+		}
+
+		// Merge profiles from external file
+		if c.fileConfig.Profiles == nil {
+			c.fileConfig.Profiles = make(map[string]*Profile)
+		}
+		for name, profile := range profilesConfig.Profiles {
+			c.fileConfig.Profiles[name] = profile
+		}
+
+		// Set base profile if not already set
+		if c.fileConfig.BaseProfile == nil {
+			c.fileConfig.BaseProfile = profilesConfig.BaseProfile
+		}
+
+		if c.config.Verbose {
+			fmt.Printf("Loaded profiles from %s\n", profilesPath)
+		}
+	}
+
+	return nil
+}
+
+// extractYAMLFromMarkdown extracts YAML content from a single YAML code block in a Markdown file
+func extractYAMLFromMarkdown(content string) (string, error) {
+	lines := strings.Split(content, "\n")
+	var yamlLines []string
+	var inYAMLBlock bool
+	var inNonYAMLBlock bool
+	var yamlBlockCount int
+	var currentBlockStart int
+
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Check if this line starts a code block
+		if strings.HasPrefix(trimmed, "```") {
+			if !inYAMLBlock && !inNonYAMLBlock {
+				// Starting a new code block
+				if trimmed == "```yaml" || trimmed == "```yml" || trimmed == "```" {
+					inYAMLBlock = true
+					yamlBlockCount++
+					currentBlockStart = i
+					continue
+				} else {
+					// This is a non-YAML code block (e.g., ```javascript)
+					inNonYAMLBlock = true
+					continue
+				}
+			} else {
+				// Ending a code block
+				if trimmed == "```" {
+					inYAMLBlock = false
+					inNonYAMLBlock = false
+					continue
+				}
+			}
+		}
+
+		// If we're in a YAML block, collect the line
+		if inYAMLBlock {
+			yamlLines = append(yamlLines, line)
+		}
+	}
+
+	// Validate that we found exactly one YAML block
+	if yamlBlockCount == 0 {
+		return "", fmt.Errorf("no YAML code blocks found in markdown file")
+	}
+	if yamlBlockCount > 1 {
+		return "", fmt.Errorf("multiple YAML code blocks found in markdown file, expected exactly one")
+	}
+
+	// Check if we ended in a YAML block (unclosed)
+	if inYAMLBlock {
+		return "", fmt.Errorf("unclosed YAML code block starting at line %d", currentBlockStart+1)
+	}
+
+	yamlContent := strings.Join(yamlLines, "\n")
+	if strings.TrimSpace(yamlContent) == "" {
+		return "", fmt.Errorf("YAML code block is empty")
+	}
+
+	return yamlContent, nil
+}
+
+func (c *Compiler) applyProfile(profileName string) error {
+	if c.fileConfig.Profiles == nil {
+		return fmt.Errorf("no profiles defined")
+	}
+
+	profile, exists := c.fileConfig.Profiles[profileName]
+	if !exists {
+		return fmt.Errorf("profile '%s' not found", profileName)
+	}
+
+	// Apply profile settings, only if not already set by command line
+	if len(c.config.GlobPatterns) == 0 {
+		// Start with base profile globs if available
+		var globPatterns []string
+		if c.fileConfig.BaseProfile != nil && len(c.fileConfig.BaseProfile.GlobPatterns) > 0 {
+			globPatterns = append(globPatterns, c.fileConfig.BaseProfile.GlobPatterns...)
+		}
+
+		// Add profile-specific globs
+		if len(profile.GlobPatterns) > 0 {
+			globPatterns = append(globPatterns, profile.GlobPatterns...)
+		}
+
+		c.config.GlobPatterns = globPatterns
+	}
+
+	if c.config.Verbose {
+		fmt.Printf("Applied profile: %s\n", profileName)
+		if profile.Description != "" {
+			fmt.Printf("Description: %s\n", profile.Description)
+		}
+		if profile.Prompt != "" {
+			fmt.Printf("Profile prompt: %s\n", profile.Prompt)
+		}
+	}
+
+	return nil
+}
+
+func (c *Compiler) getProfilePrompt() string {
+	if c.config.Profile == "" {
+		return ""
+	}
+
+	profile, exists := c.fileConfig.Profiles[c.config.Profile]
+	if !exists {
+		return ""
+	}
+
+	prompt := profile.Prompt
+
+	// Add base profile prompt if available
+	if c.fileConfig.BaseProfile != nil && c.fileConfig.BaseProfile.Prompt != "" {
+		basePrompt := c.fileConfig.BaseProfile.Prompt
+		if prompt != "" {
+			prompt = basePrompt + "\n\n" + prompt
+		} else {
+			prompt = basePrompt
+		}
+	}
+
+	return prompt
 }
 
 func (c *Compiler) determineOutputFile() (string, error) {
@@ -195,6 +446,48 @@ func (c *Compiler) determineGlobPatterns() ([]string, error) {
 }
 
 func (c *Compiler) processFiles(outFile io.Writer, globPatterns []string) (int, int, error) {
+	// Write profile prompt and context
+	if err := c.writeProfileHeader(outFile); err != nil {
+		return 0, 0, err
+	}
+
+	// Separate include and exclude patterns
+	includePatterns, excludePatterns := c.separatePatterns(globPatterns)
+
+	// Collect all files from include patterns
+	uniqueFiles, err := c.collectFiles(includePatterns)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	// Process each file, checking exclusions
+	return c.processFileList(outFile, uniqueFiles, excludePatterns)
+}
+
+// writeProfileHeader writes profile prompt and context information to output
+func (c *Compiler) writeProfileHeader(outFile io.Writer) error {
+	// Write profile prompt at the beginning if available
+	profilePrompt := c.getProfilePrompt()
+	if profilePrompt != "" {
+		// Expand templates in the prompt
+		expandedPrompt := c.expandTemplateWithProfile(profilePrompt)
+		if _, err := fmt.Fprintf(outFile, "%s\n\n", expandedPrompt); err != nil {
+			return err
+		}
+	}
+
+	// Write context information
+	if c.config.Profile != "" {
+		if _, err := fmt.Fprintf(outFile, "---\nSYSTEM CONTEXT: Profile '%s'\n---\n\n", c.config.Profile); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// separatePatterns separates glob patterns into include and exclude patterns
+func (c *Compiler) separatePatterns(globPatterns []string) ([]string, []string) {
 	var includePatterns, excludePatterns []string
 
 	for _, pattern := range globPatterns {
@@ -205,12 +498,17 @@ func (c *Compiler) processFiles(outFile io.Writer, globPatterns []string) (int, 
 		}
 	}
 
+	return includePatterns, excludePatterns
+}
+
+// collectFiles collects all files from include patterns and removes duplicates
+func (c *Compiler) collectFiles(includePatterns []string) ([]string, error) {
 	var allFiles []string
 	for _, pattern := range includePatterns {
 		// Use doublestar for proper ** recursive globbing
 		matches, err := doublestar.FilepathGlob(pattern)
 		if err != nil {
-			return 0, 0, fmt.Errorf("failed to glob pattern %s: %w", pattern, err)
+			return nil, fmt.Errorf("failed to glob pattern %s: %w", pattern, err)
 		}
 		allFiles = append(allFiles, matches...)
 	}
@@ -225,28 +523,20 @@ func (c *Compiler) processFiles(outFile io.Writer, globPatterns []string) (int, 
 		}
 	}
 
+	return uniqueFiles, nil
+}
+
+// processFileList processes each file in the list, checking exclusions
+func (c *Compiler) processFileList(
+	outFile io.Writer, uniqueFiles []string, excludePatterns []string,
+) (int, int, error) {
 	processedCount := 0
 	excludedCount := 0
 
 	for _, file := range uniqueFiles {
-		// Check if file should be excluded using doublestar for exclusion patterns too
-		excluded := false
-		var matchedPattern string
-		for _, excludePattern := range excludePatterns {
-			// Normalize paths for comparison to handle cross-platform differences
-			normalizedFile := filepath.ToSlash(file)
-			normalizedPattern := filepath.ToSlash(excludePattern)
-
-			// Use doublestar.Match for consistent pattern matching
-			if matched, _ := doublestar.Match(normalizedPattern, normalizedFile); matched {
-				excluded = true
-				matchedPattern = excludePattern
-				excludedCount++
-				break
-			}
-		}
-
+		excluded, matchedPattern := c.checkFileExclusion(file, excludePatterns)
 		if excluded {
+			excludedCount++
 			// Show excluded files if verbose mode is on OR if ListExcluded is specifically requested
 			if c.config.Verbose || c.config.ListExcluded {
 				fmt.Printf("Excluding file (matches '%s'): %s\n", matchedPattern, file)
@@ -260,6 +550,21 @@ func (c *Compiler) processFiles(outFile io.Writer, globPatterns []string) (int, 
 	}
 
 	return processedCount, excludedCount, nil
+}
+
+// checkFileExclusion checks if a file should be excluded based on exclusion patterns
+func (c *Compiler) checkFileExclusion(file string, excludePatterns []string) (bool, string) {
+	for _, excludePattern := range excludePatterns {
+		// Normalize paths for comparison to handle cross-platform differences
+		normalizedFile := filepath.ToSlash(file)
+		normalizedPattern := filepath.ToSlash(excludePattern)
+
+		// Use doublestar.Match for consistent pattern matching
+		if matched, _ := doublestar.Match(normalizedPattern, normalizedFile); matched {
+			return true, excludePattern
+		}
+	}
+	return false, ""
 }
 
 func (c *Compiler) processFile(outFile io.Writer, filename string) error {
@@ -329,4 +634,76 @@ func expandPath(path string) string {
 
 	// Clean the path to handle cross-platform path separators
 	return filepath.Clean(buf.String())
+}
+
+// expandTemplateWithProfile expands templates in strings with profile-specific variables
+func (c *Compiler) expandTemplateWithProfile(text string) string {
+	// Get home directory
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		homeDir = "~"
+	}
+
+	// Create template data with profile variables
+	data := struct {
+		TemplateData
+		Vars map[string]string
+	}{
+		TemplateData: TemplateData{Home: homeDir},
+		Vars:         make(map[string]string),
+	}
+
+	// Add profile variables if available
+	if c.config.Profile != "" {
+		if profile, exists := c.fileConfig.Profiles[c.config.Profile]; exists && profile.Variables != nil {
+			for k, v := range profile.Variables {
+				data.Vars[k] = v
+			}
+		}
+	}
+
+	// Parse and execute template
+	tmpl, err := template.New("text").Parse(text)
+	if err != nil {
+		return text
+	}
+
+	var buf bytes.Buffer
+	err = tmpl.Execute(&buf, data)
+	if err != nil {
+		return text
+	}
+
+	return buf.String()
+}
+
+// LoadConfigOnly loads configuration and profiles without running compilation
+func (c *Compiler) LoadConfigOnly() error {
+	// Load configuration
+	if err := c.loadConfig(); err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Load profiles if available
+	if err := c.loadProfiles(); err != nil {
+		return fmt.Errorf("failed to load profiles: %w", err)
+	}
+
+	return nil
+}
+
+func (c *Compiler) ListAvailableProfiles() {
+	if len(c.fileConfig.Profiles) == 0 {
+		fmt.Println("No profiles defined.")
+		return
+	}
+
+	fmt.Printf("Available profiles:\n\n")
+	for name, profile := range c.fileConfig.Profiles {
+		fmt.Printf("  %s", name)
+		if profile.Description != "" {
+			fmt.Printf(" - %s", profile.Description)
+		}
+		fmt.Println()
+	}
 }
