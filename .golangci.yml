@@ -45,4 +45,5 @@ issues:
     - path: _test\.go
       linters:
         - gosec
-        - lll 
+        - lll
+        - gocyclo

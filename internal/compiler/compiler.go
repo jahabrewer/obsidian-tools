@@ -76,6 +76,40 @@ func New(config *Config) *Compiler {
 }
 
 func (c *Compiler) Run() error {
+	// Initialize configuration and profiles
+	if err := c.initializeConfig(); err != nil {
+		return err
+	}
+
+	// Determine output file and glob patterns
+	outputFile, globPatterns, err := c.prepareFileSettings()
+	if err != nil {
+		return err
+	}
+
+	// Print verbose info if requested
+	c.printVerboseInfo(outputFile, globPatterns)
+
+	// Setup output file
+	outFile, err := c.setupOutputFile(outputFile)
+	if err != nil {
+		return err
+	}
+	defer outFile.Close()
+
+	// Process files
+	processedCount, excludedCount, err := c.processFiles(outFile, globPatterns)
+	if err != nil {
+		return err
+	}
+
+	// Report results
+	c.reportResults(processedCount, excludedCount, outputFile, outFile)
+	return nil
+}
+
+// initializeConfig loads configuration and applies profiles
+func (c *Compiler) initializeConfig() error {
 	// Load configuration
 	if err := c.loadConfig(); err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
@@ -98,43 +132,54 @@ func (c *Compiler) Run() error {
 		c.config.ListExcluded = c.fileConfig.ListExcluded
 	}
 
+	return nil
+}
+
+// prepareFileSettings determines output file and glob patterns
+func (c *Compiler) prepareFileSettings() (string, []string, error) {
 	// Determine output file
 	outputFile, err := c.determineOutputFile()
 	if err != nil {
-		return err
+		return "", nil, err
 	}
 
 	// Determine glob patterns
 	globPatterns, err := c.determineGlobPatterns()
 	if err != nil {
-		return err
+		return "", nil, err
 	}
 
+	return outputFile, globPatterns, nil
+}
+
+// printVerboseInfo prints verbose information if requested
+func (c *Compiler) printVerboseInfo(outputFile string, globPatterns []string) {
 	if c.config.Verbose {
 		fmt.Printf("note-compiler (version info would be here)\n")
 		fmt.Printf("Output file: %s\n", outputFile)
 		fmt.Printf("Glob patterns: %v\n", globPatterns)
 		fmt.Println()
 	}
+}
 
+// setupOutputFile creates output directory and file
+func (c *Compiler) setupOutputFile(outputFile string) (*os.File, error) {
 	// Create output directory
 	if mkdirErr := os.MkdirAll(filepath.Dir(outputFile), 0755); mkdirErr != nil {
-		return fmt.Errorf("failed to create output directory: %w", mkdirErr)
+		return nil, fmt.Errorf("failed to create output directory: %w", mkdirErr)
 	}
 
 	// Create/clear output file
 	outFile, err := os.Create(outputFile)
 	if err != nil {
-		return fmt.Errorf("failed to create output file: %w", err)
-	}
-	defer outFile.Close()
-
-	// Process files
-	processedCount, excludedCount, err := c.processFiles(outFile, globPatterns)
-	if err != nil {
-		return err
+		return nil, fmt.Errorf("failed to create output file: %w", err)
 	}
 
+	return outFile, nil
+}
+
+// reportResults reports processing results and handles clipboard
+func (c *Compiler) reportResults(processedCount, excludedCount int, outputFile string, outFile *os.File) {
 	fmt.Printf("Successfully processed %d files into %s\n", processedCount, outputFile)
 	fmt.Printf("Number of files excluded: %d\n", excludedCount)
 
@@ -151,8 +196,6 @@ func (c *Compiler) Run() error {
 			fmt.Println("Content copied to clipboard")
 		}
 	}
-
-	return nil
 }
 
 func (c *Compiler) loadConfig() error {
@@ -403,23 +446,48 @@ func (c *Compiler) determineGlobPatterns() ([]string, error) {
 }
 
 func (c *Compiler) processFiles(outFile io.Writer, globPatterns []string) (int, int, error) {
+	// Write profile prompt and context
+	if err := c.writeProfileHeader(outFile); err != nil {
+		return 0, 0, err
+	}
+
+	// Separate include and exclude patterns
+	includePatterns, excludePatterns := c.separatePatterns(globPatterns)
+
+	// Collect all files from include patterns
+	uniqueFiles, err := c.collectFiles(includePatterns)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	// Process each file, checking exclusions
+	return c.processFileList(outFile, uniqueFiles, excludePatterns)
+}
+
+// writeProfileHeader writes profile prompt and context information to output
+func (c *Compiler) writeProfileHeader(outFile io.Writer) error {
 	// Write profile prompt at the beginning if available
 	profilePrompt := c.getProfilePrompt()
 	if profilePrompt != "" {
 		// Expand templates in the prompt
 		expandedPrompt := c.expandTemplateWithProfile(profilePrompt)
 		if _, err := fmt.Fprintf(outFile, "%s\n\n", expandedPrompt); err != nil {
-			return 0, 0, err
+			return err
 		}
 	}
 
 	// Write context information
 	if c.config.Profile != "" {
 		if _, err := fmt.Fprintf(outFile, "---\nSYSTEM CONTEXT: Profile '%s'\n---\n\n", c.config.Profile); err != nil {
-			return 0, 0, err
+			return err
 		}
 	}
 
+	return nil
+}
+
+// separatePatterns separates glob patterns into include and exclude patterns
+func (c *Compiler) separatePatterns(globPatterns []string) ([]string, []string) {
 	var includePatterns, excludePatterns []string
 
 	for _, pattern := range globPatterns {
@@ -430,12 +498,17 @@ func (c *Compiler) processFiles(outFile io.Writer, globPatterns []string) (int, 
 		}
 	}
 
+	return includePatterns, excludePatterns
+}
+
+// collectFiles collects all files from include patterns and removes duplicates
+func (c *Compiler) collectFiles(includePatterns []string) ([]string, error) {
 	var allFiles []string
 	for _, pattern := range includePatterns {
 		// Use doublestar for proper ** recursive globbing
 		matches, err := doublestar.FilepathGlob(pattern)
 		if err != nil {
-			return 0, 0, fmt.Errorf("failed to glob pattern %s: %w", pattern, err)
+			return nil, fmt.Errorf("failed to glob pattern %s: %w", pattern, err)
 		}
 		allFiles = append(allFiles, matches...)
 	}
@@ -450,28 +523,20 @@ func (c *Compiler) processFiles(outFile io.Writer, globPatterns []string) (int, 
 		}
 	}
 
+	return uniqueFiles, nil
+}
+
+// processFileList processes each file in the list, checking exclusions
+func (c *Compiler) processFileList(
+	outFile io.Writer, uniqueFiles []string, excludePatterns []string,
+) (int, int, error) {
 	processedCount := 0
 	excludedCount := 0
 
 	for _, file := range uniqueFiles {
-		// Check if file should be excluded using doublestar for exclusion patterns too
-		excluded := false
-		var matchedPattern string
-		for _, excludePattern := range excludePatterns {
-			// Normalize paths for comparison to handle cross-platform differences
-			normalizedFile := filepath.ToSlash(file)
-			normalizedPattern := filepath.ToSlash(excludePattern)
-
-			// Use doublestar.Match for consistent pattern matching
-			if matched, _ := doublestar.Match(normalizedPattern, normalizedFile); matched {
-				excluded = true
-				matchedPattern = excludePattern
-				excludedCount++
-				break
-			}
-		}
-
+		excluded, matchedPattern := c.checkFileExclusion(file, excludePatterns)
 		if excluded {
+			excludedCount++
 			// Show excluded files if verbose mode is on OR if ListExcluded is specifically requested
 			if c.config.Verbose || c.config.ListExcluded {
 				fmt.Printf("Excluding file (matches '%s'): %s\n", matchedPattern, file)
@@ -485,6 +550,21 @@ func (c *Compiler) processFiles(outFile io.Writer, globPatterns []string) (int, 
 	}
 
 	return processedCount, excludedCount, nil
+}
+
+// checkFileExclusion checks if a file should be excluded based on exclusion patterns
+func (c *Compiler) checkFileExclusion(file string, excludePatterns []string) (bool, string) {
+	for _, excludePattern := range excludePatterns {
+		// Normalize paths for comparison to handle cross-platform differences
+		normalizedFile := filepath.ToSlash(file)
+		normalizedPattern := filepath.ToSlash(excludePattern)
+
+		// Use doublestar.Match for consistent pattern matching
+		if matched, _ := doublestar.Match(normalizedPattern, normalizedFile); matched {
+			return true, excludePattern
+		}
+	}
+	return false, ""
 }
 
 func (c *Compiler) processFile(outFile io.Writer, filename string) error {
@@ -613,7 +693,7 @@ func (c *Compiler) LoadConfigOnly() error {
 }
 
 func (c *Compiler) ListAvailableProfiles() {
-	if c.fileConfig.Profiles == nil || len(c.fileConfig.Profiles) == 0 {
+	if len(c.fileConfig.Profiles) == 0 {
 		fmt.Println("No profiles defined.")
 		return
 	}
