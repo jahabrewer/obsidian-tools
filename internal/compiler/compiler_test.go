@@ -1840,11 +1840,19 @@ profiles:
 			t.Fatal(err)
 		}
 
+		// Create an empty config file to prevent loading the default config
+		configFile := filepath.Join(tempDir, "empty-config.yaml")
+		configContent := `profiles_path: ` + profilesFile
+		err = os.WriteFile(configFile, []byte(configContent), 0644)
+		if err != nil {
+			t.Fatal(err)
+		}
+
 		c := &Compiler{
-			config: &Config{},
-			fileConfig: &FileConfig{
-				ProfilesPath: profilesFile,
+			config: &Config{
+				ConfigFile: configFile, // Use empty config file instead of default
 			},
+			fileConfig: &FileConfig{},
 		}
 
 		err = c.LoadConfigOnly()
